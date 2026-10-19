@@ -1,0 +1,24 @@
+# Java / Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Node / React / Vite
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.local
+
+# IDEs & OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.swp
+
+# Environment
+.env
+.env.*
+!.env.example

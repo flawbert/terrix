@@ -1,0 +1,62 @@
+services:
+  terrix-db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: terrix-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-terrix_db}
+      POSTGRES_USER: ${POSTGRES_USER:-terrix_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-terrix_user} -d ${POSTGRES_DB:-terrix_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - terrix-network
+
+  terrix-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: terrix-api
+    restart: unless-stopped
+    depends_on:
+      terrix-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://terrix-db:5432/${POSTGRES_DB:-terrix_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-terrix_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    ports:
+      - "8080:8080"
+    networks:
+      - terrix-network
+
+  terrix-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
+    container_name: terrix-web
+    restart: unless-stopped
+    depends_on:
+      - terrix-api
+    ports:
+      - "3000:80"
+    networks:
+      - terrix-network
+
+volumes:
+  pgdata:
+
+networks:
+  terrix-network:
+    driver: bridge
