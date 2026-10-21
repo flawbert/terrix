@@ -25,6 +25,7 @@ interface LandMapProps {
   mode: MapInteractionMode;
   satelliteMode: boolean;
   selectedLand: LandLot | null;
+  hasActiveCircle: boolean;
   onSelectLand: (land: LandLot | null) => void;
   onPolygonDrawn: (geometry: GeoJsonPolygon, estimatedAreaSqm: number) => void;
   onCircleDrawn: (centerLon: number, centerLat: number, radiusMeters: number) => void;
@@ -35,6 +36,7 @@ export const LandMap: React.FC<LandMapProps> = ({
   mode,
   satelliteMode,
   selectedLand,
+  hasActiveCircle,
   onSelectLand,
   onPolygonDrawn,
   onCircleDrawn,
@@ -48,7 +50,6 @@ export const LandMap: React.FC<LandMapProps> = ({
 
   const [liveMetricTooltip, setLiveMetricTooltip] = useState<string | null>(null);
 
-  // Initialize OpenLayers Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -74,27 +75,27 @@ export const LandMap: React.FC<LandMapProps> = ({
         const lot: LandLot | undefined = feature.get('landData');
         const isSelected = selectedLand && lot && selectedLand.id === lot.id;
 
-        let fillColor = 'rgba(16, 185, 129, 0.35)'; // AVAILABLE (Emerald)
+        let fillColor = 'rgba(16, 185, 129, 0.38)';
         let strokeColor = '#10b981';
 
         if (lot?.status === 'RESERVED') {
-          fillColor = 'rgba(245, 158, 11, 0.40)'; // RESERVED (Amber)
+          fillColor = 'rgba(245, 158, 11, 0.42)';
           strokeColor = '#f59e0b';
         } else if (lot?.status === 'SOLD') {
-          fillColor = 'rgba(239, 68, 68, 0.40)'; // SOLD (Red)
+          fillColor = 'rgba(239, 68, 68, 0.42)';
           strokeColor = '#ef4444';
         }
 
         if (isSelected) {
           strokeColor = '#38bdf8';
-          fillColor = 'rgba(56, 189, 248, 0.45)';
+          fillColor = 'rgba(56, 189, 248, 0.48)';
         }
 
         return new Style({
           fill: new Fill({ color: fillColor }),
           stroke: new Stroke({
             color: strokeColor,
-            width: isSelected ? 3.5 : 2.2,
+            width: isSelected ? 3.5 : 2.5,
           }),
           text: new Text({
             text: lot ? `${lot.title}\n${formatCurrency(lot.price)}` : '',
@@ -110,7 +111,7 @@ export const LandMap: React.FC<LandMapProps> = ({
     const interactionLayer = new VectorLayer({
       source: drawSourceRef.current,
       style: new Style({
-        fill: new Fill({ color: 'rgba(56, 189, 248, 0.22)' }),
+        fill: new Fill({ color: 'rgba(56, 189, 248, 0.20)' }),
         stroke: new Stroke({
           color: '#38bdf8',
           width: 2.5,
@@ -124,7 +125,7 @@ export const LandMap: React.FC<LandMapProps> = ({
       layers: [osmLayer, satelliteLayer, landsLayer, interactionLayer],
       view: new View({
         center: fromLonLat([-47.0621, -22.9051]),
-        zoom: 15,
+        zoom: 15.5,
       }),
     });
 
@@ -136,7 +137,6 @@ export const LandMap: React.FC<LandMapProps> = ({
     };
   }, []);
 
-  // Toggle Satellite vs Street Layer
   useEffect(() => {
     if (osmLayerRef.current && satelliteLayerRef.current) {
       osmLayerRef.current.setVisible(!satelliteMode);
@@ -144,7 +144,13 @@ export const LandMap: React.FC<LandMapProps> = ({
     }
   }, [satelliteMode]);
 
-  // Render Land Polygons on the Map
+  useEffect(() => {
+    if (!hasActiveCircle && mode === 'VIEW') {
+      drawSourceRef.current.clear();
+      setLiveMetricTooltip(null);
+    }
+  }, [hasActiveCircle, mode]);
+
   useEffect(() => {
     const source = landsSourceRef.current;
     source.clear();
@@ -161,7 +167,21 @@ export const LandMap: React.FC<LandMapProps> = ({
     });
   }, [lands, selectedLand]);
 
-  // Handle Map Click for Viewing Land Lot Popup
+  // Smoothly fly/zoom to selected land lot when chosen from quick selector
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !selectedLand?.geometry?.coordinates?.[0]?.length) return;
+    const projectedRing = selectedLand.geometry.coordinates[0].map((coord) =>
+      fromLonLat([coord[0], coord[1]])
+    );
+    const polygon = new Polygon([projectedRing]);
+    map.getView().fit(polygon.getExtent(), {
+      padding: [120, 120, 120, 120],
+      maxZoom: 16.5,
+      duration: 500,
+    });
+  }, [selectedLand]);
+
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -186,17 +206,16 @@ export const LandMap: React.FC<LandMapProps> = ({
     };
   }, [mode, onSelectLand]);
 
-  // Handle Drawing Interactions (Polygon Registration & Circle Radius Search)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    setLiveMetricTooltip(null);
     if (mode === 'VIEW') {
       return;
     }
 
     drawSourceRef.current.clear();
+    setLiveMetricTooltip(null);
 
     if (mode === 'DRAW_POLYGON') {
       const drawPolygon = new Draw({
@@ -296,13 +315,28 @@ export const LandMap: React.FC<LandMapProps> = ({
         className="w-full h-full"
       />
 
-      {/* Dynamic Live Metric Tooltip (geojson.io style) */}
       {liveMetricTooltip && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none bg-slate-900/95 border border-sky-500/60 text-sky-300 px-4 py-2 rounded-full shadow-xl text-sm font-semibold tracking-wide flex items-center gap-2">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none bg-slate-900/95 border border-sky-500/60 text-sky-300 px-4 py-2 rounded-full shadow-xl text-sm font-semibold tracking-wide flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping" />
           {liveMetricTooltip}
         </div>
       )}
+
+      {/* Map Status Legend */}
+      <div className="absolute bottom-8 right-16 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-xl px-3.5 py-2.5 shadow-xl flex items-center gap-4 text-xs text-slate-200">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-emerald-500/60 border border-emerald-400 inline-block" />
+          <span>Available</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-amber-500/60 border border-amber-400 inline-block" />
+          <span>Reserved</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm bg-red-500/60 border border-red-400 inline-block" />
+          <span>Sold</span>
+        </div>
+      </div>
     </div>
   );
 };

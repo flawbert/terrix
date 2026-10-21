@@ -299,6 +299,7 @@ export const App: React.FC = () => {
           mode={mode}
           satelliteMode={satelliteMode}
           selectedLand={selectedLand}
+          hasActiveCircle={Boolean(activeCircleFilter)}
           onSelectLand={setSelectedLand}
           onPolygonDrawn={handlePolygonDrawn}
           onCircleDrawn={handleCircleDrawn}
