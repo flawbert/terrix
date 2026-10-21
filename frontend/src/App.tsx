@@ -25,6 +25,7 @@ import {
   Proposal,
 } from './types/land';
 import { formatCurrency, formatDistance } from './utils/formatters';
+import { notifyLandLotChange, subscribeToLandLotChanges } from './utils/liveSync';
 
 export const App: React.FC = () => {
   const [lands, setLands] = useState<LandLot[]>([]);
@@ -63,7 +64,12 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     loadAllLands();
-  }, [loadAllLands]);
+    return subscribeToLandLotChanges(() => {
+      if (!activeCircleFilter) {
+        loadAllLands();
+      }
+    });
+  }, [loadAllLands, activeCircleFilter]);
 
   const handlePolygonDrawn = useCallback((geometry: GeoJsonPolygon, areaSqm: number) => {
     setMode('VIEW');
@@ -103,17 +109,25 @@ export const App: React.FC = () => {
   };
 
   const handleCreateLandSubmit = async (payload: CreateLandLotPayload) => {
-    const created = await apiService.createLandLot(payload);
-    setPendingGeometry(null);
-    await loadAllLands();
-    setSelectedLand(created);
-    setBannerMessage(`Land lot "${created.title}" registered successfully!`);
+    try {
+      const created = await apiService.createLandLot(payload);
+      setPendingGeometry(null);
+      await loadAllLands();
+      notifyLandLotChange();
+      setSelectedLand(created);
+      setBannerMessage(`Land lot "${created.title}" registered successfully!`);
+    } catch (err: any) {
+      // Refresh map immediately so any conflicting lot created by another user becomes visible right underneath the modal!
+      await loadAllLands();
+      throw err;
+    }
   };
 
   const handleDeleteLand = async (id: string) => {
     await apiService.deleteLandLot(id);
     setSelectedLand(null);
     await loadAllLands();
+    notifyLandLotChange();
     setBannerMessage('Land listing removed.');
   };
 
@@ -136,6 +150,7 @@ export const App: React.FC = () => {
     const updated = await apiService.fetchReceivedProposals();
     setProposals(updated);
     await loadAllLands();
+    notifyLandLotChange();
   };
 
   const displayedLands = lands.filter((lot) => {
@@ -146,7 +161,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-slate-950">
-      {/* Top Navigation & Spatial Toolbar */}
       <header className="z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-5 py-3 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
@@ -162,13 +176,16 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Interactive Map Tools */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => {
-              if (!currentUser) { setShowAuthModal(true); return; }
+              if (!currentUser) {
+                setShowAuthModal(true);
+                return;
+              }
               setSelectedLand(null);
+              loadAllLands();
               setMode(mode === 'DRAW_POLYGON' ? 'VIEW' : 'DRAW_POLYGON');
             }}
             className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
@@ -184,7 +201,6 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              
               setSelectedLand(null);
               setMode(mode === 'DRAW_CIRCLE' ? 'VIEW' : 'DRAW_CIRCLE');
             }}
@@ -218,7 +234,6 @@ export const App: React.FC = () => {
             {satelliteMode ? 'Street Map' : 'Satellite View'}
           </button>
 
-          {/* Quick Filters */}
           <select
             aria-label="Filter by status"
             value={statusFilter}
@@ -241,7 +256,6 @@ export const App: React.FC = () => {
           />
         </div>
 
-        {/* User Auth & Proposals Inbox */}
         <div className="flex items-center gap-2">
           {currentUser ? (
             <>
@@ -281,7 +295,6 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Contextual Helper Banner */}
       {bannerMessage && (
         <div className="z-20 bg-slate-900/90 border-b border-slate-800 px-5 py-2 text-xs text-sky-300 flex items-center justify-between">
           <span>{bannerMessage}</span>
@@ -294,7 +307,6 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Map Area */}
       <main className="relative flex-1 w-full h-full">
         <LandMap
           lands={displayedLands}
@@ -315,13 +327,13 @@ export const App: React.FC = () => {
             onDelete={handleDeleteLand}
             onSubmitProposal={async (landId, price, msg) => {
               await apiService.submitProposal(landId, price, msg);
+              notifyLandLotChange();
             }}
             onRequireAuth={() => setShowAuthModal(true)}
           />
         )}
       </main>
 
-      {/* Modals */}
       {pendingGeometry && (
         <CreateLandModal
           geometry={pendingGeometry.geometry}
