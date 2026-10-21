@@ -1,0 +1,6 @@
+version: 2
+paths-ignore:
+  - "backend/src/test/**"
+  - "frontend/src/test/**"
+  - "docker-compose.yml"
+  - "**/application.yml"

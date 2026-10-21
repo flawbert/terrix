@@ -54,7 +54,7 @@ class ServicesAndStrategiesTest {
         landLotRepository = mock(LandLotRepository.class);
         proposalRepository = mock(ProposalRepository.class);
         passwordEncoder = new BCryptPasswordEncoder();
-        jwtService = new JwtService("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970", 3600000L);
+        jwtService = new JwtService(java.util.Base64.getEncoder().encodeToString("terrix-test-only-dummy-key-with-at-least-32-bytes!".getBytes()), 3600000L);
 
         authService = new AuthService(userRepository, passwordEncoder, jwtService);
         PolygonOverlapValidationStrategy overlapStrategy = new PolygonOverlapValidationStrategy(landLotRepository);
@@ -161,6 +161,9 @@ class ServicesAndStrategiesTest {
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.deleteLandLot(lot.getId(), "other@terrix.io"));
 
+        when(landLotRepository.save(any(LandLot.class))).thenAnswer(inv -> inv.getArgument(0));
+        assertEquals(LandStatus.RESERVED, landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io").status());
+        assertThrows(BusinessRuleException.class, () -> landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "other@terrix.io"));
         landLotService.deleteLandLot(lot.getId(), "owner@terrix.io");
         verify(landLotRepository).delete(lot);
     }

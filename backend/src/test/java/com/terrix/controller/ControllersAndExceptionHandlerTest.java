@@ -63,6 +63,8 @@ class ControllersAndExceptionHandlerTest {
         assertEquals(1, landLotController.listAllLandLots().getBody().size());
         assertEquals(lotId, landLotController.getLandLotById(lotId).getBody().id());
         assertEquals(1, landLotController.searchByCircle(-47.0, -22.0, 100, null, null).getBody().size());
+        when(landLotService.updateLandStatus(any(), any(), any())).thenReturn(lotRes);
+        assertEquals(HttpStatus.OK, landLotController.updateLandStatus(lotId, LandStatus.RESERVED, auth).getStatusCode());
         assertEquals(HttpStatus.NO_CONTENT, landLotController.deleteLandLot(lotId, auth).getStatusCode());
 
         ProposalResponse propRes = new ProposalResponse(

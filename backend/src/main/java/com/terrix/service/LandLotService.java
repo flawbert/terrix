@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -98,6 +99,21 @@ public class LandLotService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public LandLotResponse updateLandStatus(UUID id, LandStatus newStatus, String authenticatedEmail) {
+        LandLot landLot = landLotRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Land lot not found with id: " + id));
+
+        if (!landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
+            throw new BusinessRuleException("Only the owner of the land lot can change its status.");
+        }
+
+        landLot.setStatus(newStatus);
+        landLot.setUpdatedAt(OffsetDateTime.now());
+        LandLot saved = landLotRepository.save(landLot);
+        return toResponse(saved);
     }
 
     @Transactional
