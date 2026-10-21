@@ -1,0 +1,42 @@
+name: Terrix CI & Coverage Gate (>80%)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  backend-verify:
+    name: Backend Tests & JaCoCo (>80%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Run Maven Verify & JaCoCo Gate
+        working-directory: ./backend
+        run: mvn clean verify
+
+  frontend-verify:
+    name: Frontend Tests & Vitest Coverage (>80%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install Dependencies
+        working-directory: ./frontend
+        run: npm install
+      - name: Run Vitest Coverage Gate & Build
+        working-directory: ./frontend
+        run: |
+          npm run test:coverage
+          npm run build
