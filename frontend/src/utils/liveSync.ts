@@ -32,8 +32,6 @@ export function subscribeToLandLotChanges(onUpdate: () => void): () => void {
   window.addEventListener('focus', handleFocusOrVisibility);
   document.addEventListener('visibilitychange', handleFocusOrVisibility);
 
-  // Real-time background polling (every 3 seconds)
-  // or different browsers see newly created/reserved lots automatically!
   const intervalId = window.setInterval(() => {
     if (document.visibilityState === 'visible') {
       onUpdate();
@@ -43,7 +41,7 @@ export function subscribeToLandLotChanges(onUpdate: () => void): () => void {
   return () => {
     if (channel) channel.close();
     window.removeEventListener('focus', handleFocusOrVisibility);
-    document.removeEventListener('visibilitychange', handleFocusOrVisibility);
+    window.removeEventListener('visibilitychange', handleFocusOrVisibility);
     window.clearInterval(intervalId);
   };
 }

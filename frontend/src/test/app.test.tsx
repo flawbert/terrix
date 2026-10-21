@@ -62,11 +62,11 @@ describe('Formatters Utility Tests', () => {
 
 describe('API Service & LocalStorage Auth Tests', () => {
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
-  it('stores, retrieves and handles malformed localStorage user data', () => {
+  it('stores, retrieves and handles malformed sessionStorage user data', () => {
     expect(getStoredUser()).toBeNull();
     const user = { token: 'jwt-1', userId: 'u-1', name: 'Bob', email: 'bob@terrix.io' };
     setStoredUser(user);
@@ -74,7 +74,7 @@ describe('API Service & LocalStorage Auth Tests', () => {
     setStoredUser(null);
     expect(getStoredUser()).toBeNull();
 
-    localStorage.setItem('terrix_auth_user', '{invalid-json');
+    sessionStorage.setItem('terrix_auth_user', '{invalid-json');
     expect(getStoredUser()).toBeNull();
   });
 
@@ -189,7 +189,7 @@ describe('API Service & LocalStorage Auth Tests', () => {
 
 describe('UI Modals & Components Tests', () => {
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -365,7 +365,7 @@ describe('UI Modals & Components Tests', () => {
 
 describe('Additional App Callbacks Coverage', () => {
   it('covers remaining App toolbar, auth success, and reject proposal callbacks', async () => {
-    localStorage.clear();
+    sessionStorage.clear();
     vi.spyOn(apiService, 'fetchAllLands').mockRejectedValueOnce(new Error('Load error'));
     setStoredUser({ token: 'jwt', userId: 'u1', name: 'Alice', email: 'a@terrix.io' });
 

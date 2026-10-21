@@ -11,7 +11,7 @@ const STORAGE_KEY = 'terrix_auth_user';
 
 export function getStoredUser(): AuthUser | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
@@ -20,9 +20,9 @@ export function getStoredUser(): AuthUser | null {
 
 export function setStoredUser(user: AuthUser | null): void {
   if (!user) {
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
   } else {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user));
   }
 }
 

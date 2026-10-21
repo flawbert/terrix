@@ -15,30 +15,19 @@ public interface LandLotRepository extends JpaRepository<LandLot, UUID> {
     @Query("SELECT l FROM LandLot l JOIN FETCH l.owner ORDER BY l.createdAt DESC")
     List<LandLot> findAllWithOwner();
 
-    /**
-     * Checks if a candidate polygon overlaps any existing land lot using native PostGIS functions.
-     * ST_Intersects combined with NOT ST_Touches allows adjacent lots to share boundary lines
-     * without invading each other's interior area.
-     */
     @Query(value = """
             SELECT EXISTS (
                 SELECT 1 FROM land_lots l
                 WHERE ST_Intersects(l.geometry, :candidateGeometry)
                   AND NOT ST_Touches(l.geometry, :candidateGeometry)
+                  AND ST_Area(CAST(ST_Intersection(l.geometry, :candidateGeometry) AS geography)) > 0.5
             )
             """, nativeQuery = true)
     boolean existsOverlappingLand(@Param("candidateGeometry") Polygon candidateGeometry);
 
-    /**
-     * Calculates the exact geodesic area in square meters using PostGIS geography cast.
-     */
     @Query(value = "SELECT ST_Area(CAST(:polygon AS geography))", nativeQuery = true)
     Double calculateGeodesicAreaSqMeters(@Param("polygon") Polygon polygon);
 
-    /**
-     * Searches for land lots that intersect a dynamic circle defined by center (lon, lat) and radius in meters.
-     * Uses PostGIS ST_DWithin on geography type for accurate meter-based distance calculation.
-     */
     @Query(value = """
             SELECT l.* FROM land_lots l
             WHERE ST_DWithin(
