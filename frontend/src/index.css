@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.ol-zoom {
+  top: auto !important;
+  bottom: 1.5rem !important;
+  right: 1.5rem !important;
+  left: auto !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: transparent !important;
+}
+
+.ol-zoom button {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 0.5rem !important;
+  font-size: 1.125rem !important;
+  cursor: pointer;
+}
+
+.ol-zoom button:hover {
+  background-color: #1e293b !important;
+}
+
+.ol-attribution {
+  bottom: 0.25rem !important;
+  left: 0.5rem !important;
+  right: auto !important;
+  background: rgba(15, 23, 42, 0.75) !important;
+  border-radius: 0.375rem !important;
+  padding: 2px 6px !important;
+}
+
+.ol-attribution ul {
+  color: #cbd5e1 !important;
+  font-size: 0.7rem !important;
+}
