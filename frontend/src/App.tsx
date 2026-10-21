@@ -167,6 +167,7 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => {
+              if (!currentUser) { setShowAuthModal(true); return; }
               setSelectedLand(null);
               setMode(mode === 'DRAW_POLYGON' ? 'VIEW' : 'DRAW_POLYGON');
             }}
@@ -183,6 +184,7 @@ export const App: React.FC = () => {
           <button
             type="button"
             onClick={() => {
+              
               setSelectedLand(null);
               setMode(mode === 'DRAW_CIRCLE' ? 'VIEW' : 'DRAW_CIRCLE');
             }}

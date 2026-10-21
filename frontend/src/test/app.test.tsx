@@ -367,6 +367,7 @@ describe('Additional App Callbacks Coverage', () => {
   it('covers remaining App toolbar, auth success, and reject proposal callbacks', async () => {
     localStorage.clear();
     vi.spyOn(apiService, 'fetchAllLands').mockRejectedValueOnce(new Error('Load error'));
+    setStoredUser({ token: 'jwt', userId: 'u1', name: 'Alice', email: 'a@terrix.io' });
 
     render(<App />);
     expect(await screen.findByText(/Load error/i)).toBeInTheDocument();
@@ -380,6 +381,7 @@ describe('Additional App Callbacks Coverage', () => {
     fireEvent.click(screen.getByText(/Satellite View/i));
 
     // Clicking Proposals Inbox while logged out opens AuthModal
+    fireEvent.click(screen.getByLabelText(/Sign out/i));
     vi.spyOn(apiService, 'login').mockResolvedValue({
       token: 'jwt',
       userId: 'owner-1',
