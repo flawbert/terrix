@@ -55,6 +55,15 @@ public class LandLotController {
         );
     }
 
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<LandLotResponse> updateLandStatus(
+            @PathVariable UUID id,
+            @RequestParam LandStatus status,
+            Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : "";
+        return ResponseEntity.ok(landLotService.updateLandStatus(id, status, email));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteLandLot(@PathVariable UUID id, Authentication authentication) {
         String email = authentication != null ? authentication.getName() : "";

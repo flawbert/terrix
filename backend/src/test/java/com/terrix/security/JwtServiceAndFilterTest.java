@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 
 class JwtServiceAndFilterTest {
 
-    private static final String SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+    private static final String SECRET = java.util.Base64.getEncoder().encodeToString("terrix-test-only-dummy-key-with-at-least-32-bytes!".getBytes());
     private JwtService jwtService;
     private UserRepository userRepository;
     private JwtAuthenticationFilter filter;
