@@ -165,7 +165,7 @@ export const LandMap: React.FC<LandMapProps> = ({
       feature.set('landData', land);
       source.addFeature(feature);
     });
-  }, [lands, selectedLand]);
+  }, [lands]);
 
   // Smoothly fly/zoom to selected land lot when chosen from quick selector
   useEffect(() => {
