@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Compass,
   PlusCircle,
   Search,
   RotateCcw,
@@ -163,9 +162,11 @@ export const App: React.FC = () => {
     <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-slate-950">
       <header className="z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-5 py-3 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-            <Compass className="w-5 h-5 text-emerald-400" />
-          </div>
+          <img
+            src="/logo-terrix.svg"
+            alt="Terrix Logo"
+            className="w-10 h-10 rounded-xl object-contain"
+          />
           <div>
             <h1 className="text-base font-extrabold tracking-tight text-white flex items-center gap-2">
               TERRIX
