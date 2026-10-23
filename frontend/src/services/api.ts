@@ -100,7 +100,7 @@ export const apiService = {
   async updateLandStatus(id: string, status: LandStatus): Promise<LandLot> {
     const response = await fetch(`${API_BASE_URL}/lands/${id}/status?status=${status}`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
+      headers: getHeaders(),
     });
     return handleResponse<LandLot>(response);
   },
