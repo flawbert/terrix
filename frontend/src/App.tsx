@@ -135,6 +135,14 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleUpdateLandStatus = async (id: string, status: LandStatus) => {
+    const updated = await apiService.updateLandStatus(id, status);
+    setSelectedLand(updated);
+    await loadAllLands();
+    notifyLandLotChange();
+    setBannerMessage(`Land lot "${updated.title}" marked as ${status}.`);
+  };
+
   const handleDeleteLand = async (id: string) => {
     await apiService.deleteLandLot(id);
     setSelectedLand(null);
@@ -339,6 +347,7 @@ export const App: React.FC = () => {
             currentUser={currentUser}
             onClose={() => setSelectedLand(null)}
             onDelete={handleDeleteLand}
+            onUpdateStatus={handleUpdateLandStatus}
             onSubmitProposal={async (landId, price, msg) => {
               await apiService.submitProposal(landId, price, msg);
               notifyLandLotChange();

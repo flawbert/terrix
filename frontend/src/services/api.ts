@@ -96,6 +96,14 @@ export const apiService = {
     return handleResponse<LandLot>(res);
   },
 
+  async updateLandStatus(id: string, status: LandStatus): Promise<LandLot> {
+    const res = await fetch(`${API_BASE_URL}/lands/${id}/status?status=${status}`, {
+      method: 'PATCH',
+      headers: buildHeaders(),
+    });
+    return handleResponse<LandLot>(res);
+  },
+
   async deleteLandLot(id: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/lands/${id}`, {
       method: 'DELETE',
