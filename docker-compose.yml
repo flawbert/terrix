@@ -30,7 +30,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://terrix-db:5432/${POSTGRES_DB:-terrix_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-terrix_user}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-terrix_dev_pass}
-      JWT_SECRET: ${JWT_SECRET:-terrix-local-dev-jwt-secret-key-terrix-local-dev-jwt-secret-key}
+      JWT_SECRET: ${JWT_SECRET:-dGVycml4bG9jYWxkZXZqd3RzZWNyZXRrZXl0ZXJyaXhsb2NhbGRldmp3dHNlY3JldGtleQ==}
       SERVER_PORT: 8080
     ports:
       - "8080:8080"

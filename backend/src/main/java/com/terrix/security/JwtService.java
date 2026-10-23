@@ -1,7 +1,6 @@
 package com.terrix.security;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -9,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.UUID;
 
@@ -19,20 +19,31 @@ public class JwtService {
     private final long expirationMs;
 
     public JwtService(
-            @Value("${app.jwt.secret}") String secretHex,
-            @Value("${app.jwt.expiration-ms}") long expirationMs) {
-        byte[] keyBytes = Decoders.BASE64.decode(secretHex);
+            @Value("${terrix.security.jwt.secret:dGVycml4bG9jYWxkZXZqd3RzZWNyZXRrZXl0ZXJyaXhsb2NhbGRldmp3dHNlY3JldGtleQ==}") String secret,
+            @Value("${terrix.security.jwt.expiration-ms:86400000}") long expirationMs) {
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(secret);
+        } catch (Exception ex) {
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        }
+        if (keyBytes.length < 32) {
+            byte[] padded = new byte[32];
+            System.arraycopy(keyBytes, 0, padded, 0, keyBytes.length);
+            keyBytes = padded;
+        }
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
         this.expirationMs = expirationMs;
     }
 
-    public String generateToken(UUID userId, String email) {
+    public String generateToken(UUID userId, String email, String name) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .subject(email)
                 .claim("userId", userId.toString())
+                .claim("name", name)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey)
@@ -47,7 +58,7 @@ public class JwtService {
         try {
             Claims claims = parseClaims(token);
             return claims.getExpiration().after(new Date());
-        } catch (JwtException | IllegalArgumentException ex) {
+        } catch (Exception ex) {
             return false;
         }
     }
