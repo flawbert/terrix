@@ -47,10 +47,11 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const isOwner =
+  const isOwner = Boolean(
     currentUser &&
-    land.ownerEmail &&
-    currentUser.email.toLowerCase() === land.ownerEmail.toLowerCase();
+      ((land.ownerId && currentUser.userId === land.ownerId) ||
+        (land.ownerName && currentUser.name.toLowerCase() === land.ownerName.toLowerCase()))
+  );
 
   const handleProposalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +129,7 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
         <div className="space-y-2 text-xs text-slate-300 pt-1">
           <div className="flex items-center gap-2">
             <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="font-medium text-white">{land.OwnerContact}</span>
+            <span className="font-medium text-white">{land.ownerContact}</span>
           </div>
           {land.ownerName && (
             <div className="flex items-center gap-2">
@@ -168,7 +169,7 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
             className="w-full py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs flex items-center justify-center gap-2 transition shadow-lg shadow-sky-500/20"
           >
             <Send className="w-3.5 h-3.5" />
-            Make Purchase Offer
+            {currentUser ? 'Make Purchase Offer' : 'Sign In to Make an Offer'}
           </button>
         )}
 

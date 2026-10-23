@@ -1,8 +1,9 @@
 import {
   AuthUser,
-  CircleSearchFilter,
+  CircleSearchParams,
   CreateLandLotPayload,
   LandLot,
+  LandStatus,
   Proposal,
 } from '../types/land';
 
@@ -26,63 +27,57 @@ export function setStoredUser(user: AuthUser | null): void {
   }
 }
 
-function getHeaders(includeAuth = true): HeadersInit {
+function getAuthHeaders(): HeadersInit {
+  const user = getStoredUser();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (includeAuth) {
-    const user = getStoredUser();
-    if (user?.token) {
-      headers['Authorization'] = `Bearer ${user.token}`;
-    }
+  if (user?.token) {
+    headers['Authorization'] = `Bearer ${user.token}`;
   }
   return headers;
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    let errorMessage = `Request failed with status ${response.status}`;
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let errorMessage = `Request failed with status ${res.status}`;
     try {
-      const errorData = await response.json();
-      if (errorData.detail) {
-        errorMessage = errorData.detail;
-      } else if (errorData.title) {
-        errorMessage = errorData.title;
-      }
+      const errData = await res.json();
+      errorMessage = errData.detail || errData.title || errData.message || errorMessage;
     } catch {
-      // Fallback to default message
+      // fallback to status message
     }
     throw new Error(errorMessage);
   }
-  if (response.status === 204) {
+  if (res.status === 204) {
     return undefined as T;
   }
-  return response.json() as Promise<T>;
+  return res.json() as Promise<T>;
 }
 
 export const apiService = {
   async fetchAllLands(): Promise<LandLot[]> {
     const res = await fetch(`${API_BASE_URL}/lands`, {
-      headers: getHeaders(false),
+      headers: getAuthHeaders(),
     });
     return handleResponse<LandLot[]>(res);
   },
 
-  async searchLandsByCircle(filter: CircleSearchFilter): Promise<LandLot[]> {
-    const params = new URLSearchParams({
-      centerLon: filter.centerLon.toString(),
-      centerLat: filter.centerLat.toString(),
-      radiusMeters: filter.radiusMeters.toString(),
+  async searchLandsByCircle(params: CircleSearchParams): Promise<LandLot[]> {
+    const query = new URLSearchParams({
+      centerLon: String(params.centerLon),
+      centerLat: String(params.centerLat),
+      radiusMeters: String(params.radiusMeters),
     });
-    if (filter.maxPrice && filter.maxPrice > 0) {
-      params.append('maxPrice', filter.maxPrice.toString());
+    if (params.maxPrice !== undefined && params.maxPrice > 0) {
+      query.append('maxPrice', String(params.maxPrice));
     }
-    if (filter.status) {
-      params.append('status', filter.status);
+    if (params.status) {
+      query.append('status', params.status);
     }
 
-    const res = await fetch(`${API_BASE_URL}/lands/search/circle?${params.toString()}`, {
-      headers: getHeaders(false),
+    const res = await fetch(`${API_BASE_URL}/lands/search/circle?${query.toString()}`, {
+      headers: getAuthHeaders(),
     });
     return handleResponse<LandLot[]>(res);
   },
@@ -90,7 +85,7 @@ export const apiService = {
   async createLandLot(payload: CreateLandLotPayload): Promise<LandLot> {
     const res = await fetch(`${API_BASE_URL}/lands`, {
       method: 'POST',
-      headers: getHeaders(true),
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
     return handleResponse<LandLot>(res);
@@ -99,7 +94,7 @@ export const apiService = {
   async updateLandStatus(id: string, status: LandStatus): Promise<LandLot> {
     const res = await fetch(`${API_BASE_URL}/lands/${id}/status?status=${status}`, {
       method: 'PATCH',
-      headers: buildHeaders(),
+      headers: getAuthHeaders(),
     });
     return handleResponse<LandLot>(res);
   },
@@ -107,37 +102,33 @@ export const apiService = {
   async deleteLandLot(id: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/lands/${id}`, {
       method: 'DELETE',
-      headers: getHeaders(true),
+      headers: getAuthHeaders(),
     });
     return handleResponse<void>(res);
-  },
-
-  async register(name: string, email: string, password: string): Promise<AuthUser> {
-    const res = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: 'POST',
-      headers: getHeaders(false),
-      body: JSON.stringify({ name, email, password }),
-    });
-    const user = await handleResponse<AuthUser>(res);
-    setStoredUser(user);
-    return user;
   },
 
   async login(email: string, password: string): Promise<AuthUser> {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
-      headers: getHeaders(false),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const user = await handleResponse<AuthUser>(res);
-    setStoredUser(user);
-    return user;
+    return handleResponse<AuthUser>(res);
+  },
+
+  async register(name: string, email: string, password: string): Promise<AuthUser> {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    });
+    return handleResponse<AuthUser>(res);
   },
 
   async submitProposal(landLotId: string, offeredPrice: number, message: string): Promise<Proposal> {
     const res = await fetch(`${API_BASE_URL}/lands/${landLotId}/proposals`, {
       method: 'POST',
-      headers: getHeaders(true),
+      headers: getAuthHeaders(),
       body: JSON.stringify({ offeredPrice, message }),
     });
     return handleResponse<Proposal>(res);
@@ -145,7 +136,7 @@ export const apiService = {
 
   async fetchReceivedProposals(): Promise<Proposal[]> {
     const res = await fetch(`${API_BASE_URL}/proposals/received`, {
-      headers: getHeaders(true),
+      headers: getAuthHeaders(),
     });
     return handleResponse<Proposal[]>(res);
   },
@@ -153,7 +144,7 @@ export const apiService = {
   async evaluateProposal(proposalId: string, accept: boolean): Promise<Proposal> {
     const res = await fetch(`${API_BASE_URL}/proposals/${proposalId}/evaluate?accept=${accept}`, {
       method: 'PATCH',
-      headers: getHeaders(true),
+      headers: getAuthHeaders(),
     });
     return handleResponse<Proposal>(res);
   },
