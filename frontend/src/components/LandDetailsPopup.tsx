@@ -150,7 +150,8 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
             onClick={() => onUpdateStatus(land.id, 'SOLD')}
             className="w-full py-2 px-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
           >
-            Mark as Sold (Close Deal)
+            <BadgeCheck className="w-4 h-4 shrink-0" />
+            <span>Mark as Sold (Close Deal)</span>
           </button>
         )}
 
@@ -160,7 +161,8 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
             onClick={() => onUpdateStatus(land.id, 'AVAILABLE')}
             className="w-full py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
           >
-            Reopen as Available
+            <RotateCcw className="w-4 h-4 shrink-0" />
+            <span>Reopen as Available</span>
           </button>
         )}
 
