@@ -15,6 +15,9 @@ public interface LandLotRepository extends JpaRepository<LandLot, UUID> {
     @Query("SELECT l FROM LandLot l JOIN FETCH l.owner ORDER BY l.createdAt DESC LIMIT 200")
     List<LandLot> findAllWithOwner();
 
+    @Query("SELECT l FROM LandLot l JOIN FETCH l.owner o WHERE LOWER(o.email) = LOWER(:email) ORDER BY l.createdAt DESC")
+    List<LandLot> findAllByOwnerEmail(@Param("email") String email);
+
     @Query(value = """
             SELECT EXISTS (
                 SELECT 1 FROM land_lots l

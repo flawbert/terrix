@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Phone, User, Calendar, DollarSign, Maximize2, Send, Trash2, BadgeCheck, RotateCcw } from 'lucide-react';
+import { X, Phone, User, Calendar, DollarSign, Maximize2, Send, Trash2, BadgeCheck, RotateCcw, Pencil } from 'lucide-react';
 import { AuthUser, LandLot, LandStatus } from '../types/land';
 import { formatArea, formatCurrency } from '../utils/formatters';
 
@@ -9,6 +9,7 @@ interface LandDetailsPopupProps {
   onClose: () => void;
   onDelete: (id: string) => Promise<void>;
   onUpdateStatus?: (id: string, status: LandStatus) => Promise<void>;
+  onEdit?: (land: LandLot) => void;
   onSubmitProposal: (landId: string, offeredPrice: number, message: string) => Promise<void>;
   onRequireAuth: () => void;
 }
@@ -19,6 +20,7 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
   onClose,
   onDelete,
   onUpdateStatus,
+  onEdit,
   onSubmitProposal,
   onRequireAuth,
 }) => {
@@ -126,7 +128,11 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
       )}
 
       {/* Action Buttons: Negotiate Proposal or Owner Delete */}
-      <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+      <div
+        className={`mt-4 pt-3 border-t border-slate-800 gap-2 ${
+          isOwner ? 'grid grid-cols-2' : 'flex items-center justify-between'
+        }`}
+      >
         {land.status === 'AVAILABLE' && !isOwner && (
           <button
             type="button"
@@ -163,6 +169,17 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
           >
             <RotateCcw className="w-4 h-4 shrink-0" />
             <span>Reopen as Available</span>
+          </button>
+        )}
+
+        {isOwner && onEdit && land.status !== 'SOLD' && (
+          <button
+            type="button"
+            onClick={() => onEdit(land)}
+            className="w-full py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+          >
+            <Pencil className="w-3.5 h-3.5 shrink-0" />
+            <span>Edit Listing</span>
           </button>
         )}
 

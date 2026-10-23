@@ -5,6 +5,7 @@ import {
   LandLot,
   LandStatus,
   Proposal,
+  UpdateLandLotPayload,
 } from '../types/land';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
@@ -69,6 +70,13 @@ export const apiService = {
     return handleResponse<LandLot[]>(res);
   },
 
+  async fetchLandById(id: string): Promise<LandLot> {
+    const res = await fetch(`${API_BASE_URL}/lands/${id}`, {
+      headers: getHeaders(false),
+    });
+    return handleResponse<LandLot>(res);
+  },
+
   async searchLandsByCircle(filter: CircleSearchFilter): Promise<LandLot[]> {
     const params = new URLSearchParams({
       centerLon: filter.centerLon.toString(),
@@ -95,6 +103,29 @@ export const apiService = {
       body: JSON.stringify(payload),
     });
     return handleResponse<LandLot>(res);
+  },
+
+  async updateLandLot(id: string, payload: UpdateLandLotPayload): Promise<LandLot> {
+    const res = await fetch(`${API_BASE_URL}/lands/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<LandLot>(res);
+  },
+
+  async fetchMyLands(): Promise<LandLot[]> {
+    const res = await fetch(`${API_BASE_URL}/me/lands`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<LandLot[]>(res);
+  },
+
+  async fetchMyProposals(): Promise<Proposal[]> {
+    const res = await fetch(`${API_BASE_URL}/me/proposals`, {
+      headers: getHeaders(true),
+    });
+    return handleResponse<Proposal[]>(res);
   },
 
   async updateLandStatus(id: string, status: LandStatus): Promise<LandLot> {

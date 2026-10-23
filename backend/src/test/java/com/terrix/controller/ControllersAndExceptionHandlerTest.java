@@ -69,7 +69,8 @@ class ControllersAndExceptionHandlerTest {
 
         ProposalResponse propRes = new ProposalResponse(
                 UUID.randomUUID(), lotId, "Title", UUID.randomUUID(), "Buyer", "b@terrix.io",
-                BigDecimal.TEN, "Msg", ProposalStatus.PENDING, OffsetDateTime.now()
+                BigDecimal.TEN, "Msg", ProposalStatus.PENDING, OffsetDateTime.now(),
+                LandStatus.AVAILABLE, BigDecimal.TEN
         );
         when(proposalService.createProposal( any(), any(), any())).thenReturn(propRes);
         when(proposalService.listProposalsForOwner(any())).thenReturn(List.of(propRes));
@@ -78,6 +79,20 @@ class ControllersAndExceptionHandlerTest {
         assertEquals(HttpStatus.CREATED, proposalController.createProposal(lotId, new CreateProposalRequest(BigDecimal.TEN, "M"), auth).getStatusCode());
         assertEquals(1, proposalController.listReceivedProposals(auth).getBody().size());
         assertEquals(HttpStatus.OK, proposalController.evaluateProposal(propRes.id(), true, auth).getStatusCode());
+
+        // Edit listing (owner) endpoint
+        when(landLotService.updateLandLot(any(), any(), any())).thenReturn(lotRes);
+        UpdateLandLotRequest updateReq = new UpdateLandLotRequest("T2", "D2", BigDecimal.ONE, "C2");
+        assertEquals(HttpStatus.OK, landLotController.updateLandLot(lotId, updateReq, auth).getStatusCode());
+        assertEquals(HttpStatus.OK, landLotController.updateLandLot(lotId, updateReq, null).getStatusCode());
+        verify(landLotService).updateLandLot(lotId, updateReq, "");
+
+        // Authenticated user profile endpoints
+        ProfileController profileController = new ProfileController(landLotService, proposalService);
+        when(landLotService.listLandLotsForOwner("u@terrix.io")).thenReturn(List.of(lotRes));
+        when(proposalService.listProposalsForBuyer("u@terrix.io")).thenReturn(List.of(propRes));
+        assertEquals(1, profileController.listMyLandLots(auth).getBody().size());
+        assertEquals(1, profileController.listMyProposals(auth).getBody().size());
     }
 
     @Test

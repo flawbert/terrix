@@ -1,5 +1,6 @@
 package com.terrix.dto.response;
 
+import com.terrix.domain.enums.LandStatus;
 import com.terrix.domain.enums.ProposalStatus;
 
 import java.math.BigDecimal;
@@ -16,5 +17,7 @@ public record ProposalResponse(
         BigDecimal offeredPrice,
         String message,
         ProposalStatus status,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        LandStatus landLotStatus,
+        BigDecimal landLotPrice
 ) {}

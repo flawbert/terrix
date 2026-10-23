@@ -2,6 +2,7 @@ package com.terrix.controller;
 
 import com.terrix.domain.enums.LandStatus;
 import com.terrix.dto.request.CreateLandLotRequest;
+import com.terrix.dto.request.UpdateLandLotRequest;
 import com.terrix.dto.response.LandLotResponse;
 import com.terrix.service.LandLotService;
 import jakarta.validation.Valid;
@@ -53,6 +54,15 @@ public class LandLotController {
         return ResponseEntity.ok(
                 landLotService.searchByCircle(centerLon, centerLat, radiusMeters, maxPrice, status)
         );
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<LandLotResponse> updateLandLot(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateLandLotRequest request,
+            Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : "";
+        return ResponseEntity.ok(landLotService.updateLandLot(id, request, email));
     }
 
     @PatchMapping("/{id}/status")

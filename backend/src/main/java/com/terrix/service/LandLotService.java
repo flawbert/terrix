@@ -6,6 +6,7 @@ import com.terrix.domain.enums.LandStatus;
 import com.terrix.domain.repository.LandLotRepository;
 import com.terrix.dto.request.CreateLandLotRequest;
 import com.terrix.dto.request.GeoJsonPolygonDto;
+import com.terrix.dto.request.UpdateLandLotRequest;
 import com.terrix.dto.response.LandLotResponse;
 import com.terrix.exception.BusinessRuleException;
 import com.terrix.exception.ResourceNotFoundException;
@@ -100,6 +101,40 @@ public class LandLotService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<LandLotResponse> listLandLotsForOwner(String ownerEmail) {
+        if (ownerEmail == null || ownerEmail.isBlank()) {
+            throw new BusinessRuleException("Authentication is required to list your land lots.");
+        }
+        return landLotRepository.findAllByOwnerEmail(ownerEmail)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public LandLotResponse updateLandLot(UUID id, UpdateLandLotRequest request, String authenticatedEmail) {
+        LandLot landLot = landLotRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Land lot not found with id: " + id));
+
+        if (authenticatedEmail == null || !landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
+            throw new BusinessRuleException("Only the owner of the land lot can edit this listing.");
+        }
+
+        if (landLot.getStatus() == LandStatus.SOLD) {
+            throw new BusinessRuleException("Sold land lots can no longer be edited.");
+        }
+
+        landLot.setTitle(request.title().trim());
+        landLot.setDescription(request.description().trim());
+        landLot.setPrice(request.price());
+        landLot.setContactInfo(request.contactInfo().trim());
+        landLot.setUpdatedAt(OffsetDateTime.now());
+
+        LandLot saved = landLotRepository.save(landLot);
+        return toResponse(saved);
     }
 
     @Transactional

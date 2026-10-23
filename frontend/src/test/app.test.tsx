@@ -6,6 +6,8 @@ import { apiService, getStoredUser, setStoredUser } from '../services/api';
 import { CreateLandModal } from '../components/CreateLandModal';
 import { AuthModal } from '../components/AuthModal';
 import { LandDetailsPopup } from '../components/LandDetailsPopup';
+import { EditLandModal } from '../components/EditLandModal';
+import { UserProfileModal } from '../components/UserProfileModal';
 import { App } from '../App';
 import { LandLot, Proposal } from '../types/land';
 
@@ -420,5 +422,203 @@ describe('Additional App Callbacks Coverage', () => {
     await waitFor(() => {
       expect(apiService.evaluateProposal).toHaveBeenCalledWith('prop-2', false);
     });
+  });
+});
+
+describe('Edit Listing & User Profile Features', () => {
+  const owner = { token: 'jwt', userId: 'owner-1', name: 'Alice Farmer', email: 'alice@terrix.io' };
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('calls the new update/profile API endpoints', async () => {
+    setStoredUser(owner);
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(
+      async () => new Response(JSON.stringify([]), { status: 200 })
+    );
+
+    await apiService.updateLandLot('lot-123', { title: 'T', description: 'D', price: 1, contactInfo: 'C' });
+    await apiService.fetchMyLands();
+    await apiService.fetchMyProposals();
+    await apiService.fetchLandById('lot-123');
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => [String(url), (init as RequestInit)?.method ?? 'GET']);
+    expect(calls[0]).toEqual([expect.stringMatching(/\/lands\/lot-123$/), 'PUT']);
+    expect(calls[1][0]).toMatch(/\/me\/lands$/);
+    expect(calls[2][0]).toMatch(/\/me\/proposals$/);
+    expect(calls[3][0]).toMatch(/\/lands\/lot-123$/);
+    expect((fetchMock.mock.calls[1][1] as any).headers.Authorization).toBe('Bearer jwt');
+  });
+
+  it('renders EditLandModal pre-filled, validates and submits changes', async () => {
+    const onSubmit = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Only the owner can edit'))
+      .mockResolvedValueOnce(undefined);
+
+    render(<EditLandModal land={sampleLot} onClose={vi.fn()} onSubmit={onSubmit} />);
+
+    expect(screen.getByLabelText(/Listing Title/i)).toHaveValue('Golden Valley Plot');
+    expect(screen.getByLabelText(/Total Price/i)).toHaveValue(250000);
+
+    fireEvent.change(screen.getByLabelText(/Total Price/i), { target: { value: '0' } });
+    fireEvent.click(screen.getByText(/Save Changes/i));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/valid positive total price/i);
+
+    fireEvent.change(screen.getByLabelText(/Total Price/i), { target: { value: '300000' } });
+    fireEvent.change(screen.getByLabelText(/Listing Title/i), { target: { value: '   ' } });
+    fireEvent.click(screen.getByText(/Save Changes/i));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/cannot be empty/i);
+
+    fireEvent.change(screen.getByLabelText(/Listing Title/i), { target: { value: ' Renamed Plot ' } });
+    fireEvent.click(screen.getByText(/Save Changes/i));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Only the owner can edit/i);
+
+    fireEvent.click(screen.getByText(/Save Changes/i));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenLastCalledWith('lot-123', {
+        title: 'Renamed Plot',
+        description: sampleLot.description,
+        price: 300000,
+        contactInfo: sampleLot.contactInfo,
+      });
+    });
+  });
+
+  it('shows Edit Listing only for the owner of a non-sold lot', () => {
+    const onEdit = vi.fn();
+    const { rerender } = render(
+      <LandDetailsPopup
+        land={sampleLot}
+        currentUser={owner}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={onEdit}
+        onSubmitProposal={vi.fn()}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByText(/Edit Listing/i));
+    expect(onEdit).toHaveBeenCalledWith(sampleLot);
+
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'SOLD' }}
+        currentUser={owner}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={onEdit}
+        onSubmitProposal={vi.fn()}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+
+    rerender(
+      <LandDetailsPopup
+        land={sampleLot}
+        currentUser={{ ...owner, userId: 'someone-else' }}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={onEdit}
+        onSubmitProposal={vi.fn()}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+  });
+
+  it('renders UserProfileModal with reservations and listings tabs', async () => {
+    vi.spyOn(apiService, 'fetchMyProposals').mockResolvedValue([
+      { ...sampleProposal, id: 'p-acc', status: 'ACCEPTED', landLotTitle: 'Reserved Farm', landLotPrice: 260000 },
+      { ...sampleProposal, id: 'p-pen', landLotId: 'lot-9', landLotTitle: 'Pending Farm' },
+    ]);
+    vi.spyOn(apiService, 'fetchMyLands').mockResolvedValue([
+      sampleLot,
+      { ...sampleLot, id: 'lot-sold', title: 'Sold Plot', status: 'SOLD' },
+    ]);
+    const onViewLand = vi.fn();
+    const onEditLand = vi.fn();
+
+    render(
+      <UserProfileModal currentUser={owner} onClose={vi.fn()} onViewLand={onViewLand} onEditLand={onEditLand} />
+    );
+
+    expect(await screen.findByText('Reserved Farm')).toBeInTheDocument();
+    expect(screen.getByText('Reserved for you')).toBeInTheDocument();
+    expect(screen.getByText(/Awaiting owner/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 lot\(s\) reserved for you/i)).toBeInTheDocument();
+    expect(screen.getByText(/Asking price: \$260,000/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/View Pending Farm on map/i));
+    expect(onViewLand).toHaveBeenCalledWith('lot-9');
+
+    fireEvent.click(screen.getByRole('tab', { name: /My Listings \(2\)/i }));
+    expect(screen.getByText('Golden Valley Plot')).toBeInTheDocument();
+    expect(screen.getByText('Sold Plot')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Edit Sold Plot/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Edit Golden Valley Plot/i));
+    expect(onEditLand).toHaveBeenCalledWith(sampleLot);
+  });
+
+  it('shows empty states and errors in UserProfileModal', async () => {
+    vi.spyOn(apiService, 'fetchMyProposals').mockResolvedValue([]);
+    vi.spyOn(apiService, 'fetchMyLands').mockResolvedValue([]);
+    const { unmount } = render(
+      <UserProfileModal currentUser={owner} onClose={vi.fn()} onViewLand={vi.fn()} onEditLand={vi.fn()} />
+    );
+    expect(await screen.findByText(/not requested any land lot reservation/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /My Listings/i }));
+    expect(screen.getByText(/not listed any land lot yet/i)).toBeInTheDocument();
+    unmount();
+
+    vi.spyOn(apiService, 'fetchMyProposals').mockRejectedValue(new Error('Session expired'));
+    render(<UserProfileModal currentUser={owner} onClose={vi.fn()} onViewLand={vi.fn()} onEditLand={vi.fn()} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Session expired/i);
+  });
+
+  it('opens the profile from the header, edits a listing and focuses a lot on the map', async () => {
+    setStoredUser(owner);
+    vi.spyOn(apiService, 'fetchAllLands').mockResolvedValue([sampleLot]);
+    vi.spyOn(apiService, 'fetchMyProposals').mockResolvedValue([
+      { ...sampleProposal, landLotId: 'remote-lot', landLotTitle: 'Remote Farm' },
+    ]);
+    vi.spyOn(apiService, 'fetchMyLands').mockResolvedValue([sampleLot]);
+    vi.spyOn(apiService, 'fetchLandById').mockResolvedValue({
+      ...sampleLot,
+      id: 'remote-lot',
+      title: 'Remote Farm',
+      ownerId: 'other',
+    });
+    const updateSpy = vi
+      .spyOn(apiService, 'updateLandLot')
+      .mockResolvedValue({ ...sampleLot, title: 'Golden Valley Plot v2' });
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/1 lots visible/i)).toBeInTheDocument());
+
+    // Open profile pop-up → listings tab → edit
+    fireEvent.click(screen.getByLabelText(/Open my profile/i));
+    expect(await screen.findByTestId('user-profile-modal')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /My Listings/i }));
+    fireEvent.click(await screen.findByLabelText(/Edit Golden Valley Plot/i));
+
+    expect(screen.getByTestId('edit-land-modal')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Listing Title/i), { target: { value: 'Golden Valley Plot v2' } });
+    fireEvent.click(screen.getByText(/Save Changes/i));
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith('lot-123', expect.objectContaining({ title: 'Golden Valley Plot v2' })));
+    expect(await screen.findByText(/updated successfully/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('edit-land-modal')).not.toBeInTheDocument();
+
+    // View a reservation whose lot is not loaded locally → fetched by id
+    fireEvent.click(screen.getByRole('tab', { name: /My Reservations/i }));
+    fireEvent.click(await screen.findByLabelText(/View Remote Farm on map/i));
+    expect(await screen.findByTestId('land-details-popup')).toHaveTextContent('Remote Farm');
+    expect(screen.queryByTestId('user-profile-modal')).not.toBeInTheDocument();
+    expect(apiService.fetchLandById).toHaveBeenCalledWith('remote-lot');
   });
 });

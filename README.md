@@ -205,9 +205,12 @@ Both the backend and frontend enforce a minimum **80% code coverage gate** durin
 | `GET` | `/api/v1/lands/search/circle` | Public | Filters lots intersecting a circle (`centerLon`, `centerLat`, `radiusMeters`, optional `maxPrice`, `status`). |
 | `POST` | `/api/v1/lands` | Authenticated (JWT) | Validates non-overlapping polygon in PostGIS and registers a new land lot (`201 Created` or `409 Conflict`). |
 | `PATCH` | `/api/v1/lands/{id}/status` | Owner (JWT) | Updates land lot status (`AVAILABLE`, `RESERVED`, `SOLD`). |
+| `PUT` | `/api/v1/lands/{id}` | Owner (JWT) | Edits a listing's `title`, `description`, `price` and `contactInfo` (geometry/area are immutable; `SOLD` lots cannot be edited). |
 | `DELETE` | `/api/v1/lands/{id}` | Owner (JWT) | Removes a land lot listing (`204 No Content`). |
 | `POST` | `/api/v1/auth/register` | Public | Creates a new user account and returns a signed JWT. |
 | `POST` | `/api/v1/auth/login` | Public | Authenticates user credentials and returns a signed JWT. |
 | `POST` | `/api/v1/lands/{id}/proposals` | Authenticated (JWT) | Submits a purchase offer (`offeredPrice`, `message`) on an available land lot. |
 | `GET` | `/api/v1/proposals/received` | Authenticated (JWT) | Lists all purchase offers received for lots owned by the current user. |
 | `PATCH` | `/api/v1/proposals/{id}/evaluate` | Owner (JWT) | Accepts (`accept=true`, reserving the lot) or rejects (`accept=false`) a proposal. |
+| `GET` | `/api/v1/me/lands` | Authenticated (JWT) | Lists the land lots announced by the current user (profile pop-up "My Listings"). |
+| `GET` | `/api/v1/me/proposals` | Authenticated (JWT) | Lists the reservation requests / purchase offers made by the current user, with lot status (profile pop-up "My Reservations"). |

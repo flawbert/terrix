@@ -29,6 +29,13 @@ export interface CreateLandLotPayload {
   geometry: GeoJsonPolygon;
 }
 
+export interface UpdateLandLotPayload {
+  title: string;
+  description: string;
+  price: number;
+  contactInfo: string;
+}
+
 export interface CircleSearchFilter {
   centerLon: number;
   centerLat: number;
@@ -55,4 +62,6 @@ export interface Proposal {
   message: string;
   status: ProposalStatus;
   createdAt: string;
+  landLotStatus?: LandStatus;
+  landLotPrice?: number;
 }

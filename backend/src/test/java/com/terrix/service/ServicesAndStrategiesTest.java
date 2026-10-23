@@ -200,4 +200,67 @@ class ServicesAndStrategiesTest {
         assertThrows(BusinessRuleException.class,
                 () -> proposalService.evaluateProposal(proposal.getId(), false, "owner@terrix.io"));
     }
+
+    @Test
+    void shouldEditLandLotOnlyByOwnerAndWhileNotSold() {
+        User owner = new User(UUID.randomUUID(), "Owner", "owner@terrix.io", "hash");
+        LandLot lot = new LandLot(UUID.randomUUID(), "Old Title", "Old desc", new BigDecimal("50000"),
+                1000.0, "old contact", LandStatus.AVAILABLE, samplePolygon, owner);
+
+        when(landLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        when(landLotRepository.save(any(LandLot.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateLandLotRequest request = new UpdateLandLotRequest(
+                "  New Title ", " New desc ", new BigDecimal("80000"), " new contact ");
+
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), request, "other@terrix.io"));
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), request, null));
+
+        LandLotResponse updated = landLotService.updateLandLot(lot.getId(), request, "OWNER@terrix.io");
+        assertEquals("New Title", updated.title());
+        assertEquals("New desc", updated.description());
+        assertEquals(new BigDecimal("80000"), updated.price());
+        assertEquals("new contact", updated.contactInfo());
+        assertEquals(new BigDecimal("80.00"), updated.pricePerSqMeter());
+
+        lot.setStatus(LandStatus.SOLD);
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), request, "owner@terrix.io"));
+
+        UUID missingId = UUID.randomUUID();
+        when(landLotRepository.findById(missingId)).thenReturn(Optional.empty());
+        assertThrows(ResourceNotFoundException.class,
+                () -> landLotService.updateLandLot(missingId, request, "owner@terrix.io"));
+    }
+
+    @Test
+    void shouldListLandLotsAndProposalsOfAuthenticatedUser() {
+        User owner = new User(UUID.randomUUID(), "Owner", "owner@terrix.io", "hash");
+        User buyer = new User(UUID.randomUUID(), "Buyer", "buyer@terrix.io", "hash");
+        LandLot lot = new LandLot(UUID.randomUUID(), "Lot 1", "Desc", new BigDecimal("50000"),
+                1000.0, "contact", LandStatus.RESERVED, samplePolygon, owner);
+        Proposal proposal = new Proposal(UUID.randomUUID(), lot, buyer, new BigDecimal("48000"), "Cash");
+        proposal.setStatus(ProposalStatus.ACCEPTED);
+
+        when(landLotRepository.findAllByOwnerEmail("owner@terrix.io")).thenReturn(List.of(lot));
+        when(userRepository.findByEmailIgnoreCase("buyer@terrix.io")).thenReturn(Optional.of(buyer));
+        when(proposalRepository.findSentProposalsByBuyerId(buyer.getId())).thenReturn(List.of(proposal));
+
+        List<LandLotResponse> myLands = landLotService.listLandLotsForOwner("owner@terrix.io");
+        assertEquals(1, myLands.size());
+        assertEquals("Lot 1", myLands.get(0).title());
+        assertThrows(BusinessRuleException.class, () -> landLotService.listLandLotsForOwner(" "));
+        assertThrows(BusinessRuleException.class, () -> landLotService.listLandLotsForOwner(null));
+
+        List<ProposalResponse> myProposals = proposalService.listProposalsForBuyer("buyer@terrix.io");
+        assertEquals(1, myProposals.size());
+        assertEquals(ProposalStatus.ACCEPTED, myProposals.get(0).status());
+        assertEquals(LandStatus.RESERVED, myProposals.get(0).landLotStatus());
+        assertEquals(new BigDecimal("50000"), myProposals.get(0).landLotPrice());
+
+        when(userRepository.findByEmailIgnoreCase("ghost@terrix.io")).thenReturn(Optional.empty());
+        assertThrows(ResourceNotFoundException.class, () -> proposalService.listProposalsForBuyer("ghost@terrix.io"));
+    }
 }

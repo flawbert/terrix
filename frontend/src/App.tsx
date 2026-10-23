@@ -9,11 +9,14 @@ import {
   Inbox,
   Check,
   XCircle,
+  CircleUser,
 } from 'lucide-react';
 import { LandMap, MapInteractionMode } from './components/LandMap';
 import { CreateLandModal } from './components/CreateLandModal';
+import { EditLandModal } from './components/EditLandModal';
 import { LandDetailsPopup } from './components/LandDetailsPopup';
 import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { apiService, getStoredUser, setStoredUser } from './services/api';
 import {
   AuthUser,
@@ -22,6 +25,7 @@ import {
   LandLot,
   LandStatus,
   Proposal,
+  UpdateLandLotPayload,
 } from './types/land';
 import { formatCurrency, formatDistance } from './utils/formatters';
 import { notifyLandLotChange, subscribeToLandLotChanges } from './utils/liveSync';
@@ -51,6 +55,9 @@ export const App: React.FC = () => {
   const [showProposalsInbox, setShowProposalsInbox] = useState(false);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [editingLand, setEditingLand] = useState<LandLot | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
   const loadAllLands = useCallback(async () => {
     try {
@@ -149,6 +156,32 @@ export const App: React.FC = () => {
     await loadAllLands();
     notifyLandLotChange();
     setBannerMessage('Land listing removed.');
+  };
+
+  const handleEditLandSubmit = async (id: string, payload: UpdateLandLotPayload) => {
+    const updated = await apiService.updateLandLot(id, payload);
+    setEditingLand(null);
+    setLands((prev) => prev.map((lot) => (lot.id === updated.id ? updated : lot)));
+    setSelectedLand((prev) => (prev && prev.id === updated.id ? updated : prev));
+    setProfileRefreshKey((k) => k + 1);
+    await loadAllLands();
+    notifyLandLotChange();
+    setBannerMessage(`Land lot "${updated.title}" updated successfully.`);
+  };
+
+  const handleViewLandFromProfile = async (landLotId: string) => {
+    setShowProfile(false);
+    setMode('VIEW');
+    const local = lands.find((lot) => lot.id === landLotId);
+    if (local) {
+      setSelectedLand(local);
+      return;
+    }
+    try {
+      setSelectedLand(await apiService.fetchLandById(landLotId));
+    } catch (err: any) {
+      setBannerMessage(err.message || 'Could not load the selected land lot.');
+    }
   };
 
   const handleOpenInbox = async () => {
@@ -289,14 +322,23 @@ export const App: React.FC = () => {
                 <Inbox className="w-3.5 h-3.5" />
                 Proposals Inbox
               </button>
-              <span className="text-xs text-slate-300 font-medium hidden sm:inline">
-                {currentUser.name}
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowProfile(true)}
+                aria-label="Open my profile"
+                title="My profile: reservations & listings"
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5"
+              >
+                <CircleUser className="w-4 h-4 text-sky-400" />
+                <span className="hidden sm:inline">{currentUser.name}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setStoredUser(null);
                   setCurrentUser(null);
+                  setShowProfile(false);
+                  setEditingLand(null);
                 }}
                 aria-label="Sign out"
                 className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300"
@@ -348,6 +390,7 @@ export const App: React.FC = () => {
             onClose={() => setSelectedLand(null)}
             onDelete={handleDeleteLand}
             onUpdateStatus={handleUpdateLandStatus}
+            onEdit={(land) => setEditingLand(land)}
             onSubmitProposal={async (landId, price, msg) => {
               await apiService.submitProposal(landId, price, msg);
               notifyLandLotChange();
@@ -363,6 +406,25 @@ export const App: React.FC = () => {
           estimatedAreaSqm={pendingGeometry.areaSqm}
           onClose={() => setPendingGeometry(null)}
           onSubmit={handleCreateLandSubmit}
+        />
+      )}
+
+      {showProfile && currentUser && (
+        <UserProfileModal
+          currentUser={currentUser}
+          refreshKey={profileRefreshKey}
+          onClose={() => setShowProfile(false)}
+          onViewLand={handleViewLandFromProfile}
+          onEditLand={(land) => setEditingLand(land)}
+        />
+      )}
+
+      {editingLand && (
+        <EditLandModal
+          key={editingLand.id}
+          land={editingLand}
+          onClose={() => setEditingLand(null)}
+          onSubmit={handleEditLandSubmit}
         />
       )}
 

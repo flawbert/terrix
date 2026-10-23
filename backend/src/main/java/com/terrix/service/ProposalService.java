@@ -74,6 +74,17 @@ public class ProposalService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ProposalResponse> listProposalsForBuyer(String buyerEmail) {
+        User buyer = userRepository.findByEmailIgnoreCase(buyerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Authenticated buyer not found."));
+
+        return proposalRepository.findSentProposalsByBuyerId(buyer.getId())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public ProposalResponse evaluateProposal(UUID proposalId, boolean accept, String ownerEmail) {
         Proposal proposal = proposalRepository.findById(proposalId)
@@ -112,7 +123,9 @@ public class ProposalService {
                 proposal.getOfferedPrice(),
                 proposal.getMessage(),
                 proposal.getStatus(),
-                proposal.getCreatedAt()
+                proposal.getCreatedAt(),
+                proposal.getLandLot().getStatus(),
+                proposal.getLandLot().getPrice()
         );
     }
 }
