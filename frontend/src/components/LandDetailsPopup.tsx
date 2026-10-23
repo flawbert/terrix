@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Phone, User, Calendar, DollarSign, Maximize2, Send, Trash2 } from 'lucide-react';
+import { X, Phone, User, Calendar, DollarSign, Maximize2, Send, Trash2, BadgeCheck, RotateCcw } from 'lucide-react';
 import { AuthUser, LandLot, LandStatus } from '../types/land';
 import { formatArea, formatCurrency } from '../utils/formatters';
 
