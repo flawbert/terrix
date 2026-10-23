@@ -76,7 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-xs text-red-300">
+            <div role="alert" className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-xs text-red-300">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
               <span>{error}</span>
             </div>
