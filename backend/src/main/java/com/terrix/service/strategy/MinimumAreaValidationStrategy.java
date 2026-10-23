@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
 @Order(2)
 public class MinimumAreaValidationStrategy implements LandValidationStrategy {
 
-    private static final double MIN_AREA_SQ_METERS = 10.0;
+    private static final double MIN_AREA_SQ_METERS = 25.0;
+    private static final double MAX_AREA_SQ_METERS = 50_000_000.0; // 5,000 hectares (50 km²)
+
     private final LandLotRepository landLotRepository;
 
     public MinimumAreaValidationStrategy(LandLotRepository landLotRepository) {
@@ -19,10 +21,15 @@ public class MinimumAreaValidationStrategy implements LandValidationStrategy {
 
     @Override
     public void validate(Polygon candidatePolygon) {
-        Double area = landLotRepository.calculateGeodesicAreaSqMeters(candidatePolygon);
-        if (area == null || area < MIN_AREA_SQ_METERS) {
+        Double areaSqMeters = landLotRepository.calculateGeodesicAreaSqMeters(candidatePolygon);
+        if (areaSqMeters == null || areaSqMeters < MIN_AREA_SQ_METERS) {
             throw new InvalidGeometryException(
-                    "The drawn land lot is too small. Minimum required area is " + MIN_AREA_SQ_METERS + " square meters."
+                    String.format("The drawn polygon area is too small (minimum required is %.0f m²).", MIN_AREA_SQ_METERS)
+            );
+        }
+        if (areaSqMeters > MAX_AREA_SQ_METERS) {
+            throw new InvalidGeometryException(
+                    "The drawn polygon exceeds the maximum allowed land lot area of 5,000 hectares (50 km²)."
             );
         }
     }

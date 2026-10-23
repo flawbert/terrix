@@ -12,7 +12,7 @@ import java.util.UUID;
 
 public interface LandLotRepository extends JpaRepository<LandLot, UUID> {
 
-    @Query("SELECT l FROM LandLot l JOIN FETCH l.owner ORDER BY l.createdAt DESC")
+    @Query("SELECT l FROM LandLot l JOIN FETCH l.owner ORDER BY l.createdAt DESC LIMIT 200")
     List<LandLot> findAllWithOwner();
 
     @Query(value = """
@@ -38,6 +38,7 @@ public interface LandLotRepository extends JpaRepository<LandLot, UUID> {
             AND (:maxPrice IS NULL OR l.price <= :maxPrice)
             AND (:status IS NULL OR l.status = :status)
             ORDER BY l.created_at DESC
+            LIMIT 200
             """, nativeQuery = true)
     List<LandLot> searchWithinCircle(
             @Param("centerLon") double centerLon,

@@ -72,11 +72,24 @@ export const App: React.FC = () => {
 
   const handlePolygonDrawn = useCallback((geometry: GeoJsonPolygon, areaSqm: number) => {
     setMode('VIEW');
+    if (areaSqm < 25) {
+      setBannerMessage('The drawn land lot is too small (minimum required area is 25 m²).');
+      return;
+    }
+    if (areaSqm > 50_000_000) {
+      setBannerMessage('The drawn land lot exceeds the maximum allowed area of 5,000 ha (50 km²). Please draw a realistic plot.');
+      return;
+    }
     setPendingGeometry({ geometry, areaSqm });
   }, []);
 
   const handleCircleDrawn = useCallback(
     async (centerLon: number, centerLat: number, radiusMeters: number) => {
+      if (radiusMeters > 50_000) {
+        setMode('VIEW');
+        setBannerMessage('Search radius cannot exceed 50 km (50,000 m). Please draw a smaller search area.');
+        return;
+      }
       setActiveCircleFilter({ centerLon, centerLat, radiusMeters });
       try {
         const filtered = await apiService.searchLandsByCircle({

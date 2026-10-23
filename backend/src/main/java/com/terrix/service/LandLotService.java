@@ -87,7 +87,8 @@ public class LandLotService {
             BigDecimal maxPrice,
             LandStatus status) {
 
-        if (radiusMeters <= 0) {
+        if (radiusMeters <= 0 || radiusMeters > 50_000) {
+            if (radiusMeters > 50_000) throw new InvalidGeometryException("Search radius cannot exceed 50 km (50,000 meters).");
             throw new BusinessRuleException("Search radius must be greater than zero meters.");
         }
         if (centerLon < -180 || centerLon > 180 || centerLat < -90 || centerLat > 90) {
