@@ -213,7 +213,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {lot.status !== 'SOLD' && (
+                    {lot.status === 'AVAILABLE' && (
                       <button
                         type="button"
                         onClick={() => onEditLand(lot)}

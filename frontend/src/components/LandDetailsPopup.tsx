@@ -184,7 +184,7 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
           </button>
         )}
 
-        {isOwner && onEdit && land.status !== 'SOLD' && (
+        {isOwner && onEdit && land.status === 'AVAILABLE' && (
           <button
             type="button"
             onClick={() => onEdit(land)}

@@ -205,7 +205,7 @@ Both the backend and frontend enforce a minimum **80% code coverage gate** durin
 | `GET` | `/api/v1/lands/search/circle` | Public | Filters lots intersecting a circle (`centerLon`, `centerLat`, `radiusMeters`, optional `maxPrice`, `status`). |
 | `POST` | `/api/v1/lands` | Authenticated (JWT) | Validates non-overlapping polygon in PostGIS and registers a new land lot (`201 Created` or `409 Conflict`). |
 | `PATCH` | `/api/v1/lands/{id}/status` | Owner (JWT) | Updates land lot status (`AVAILABLE`, `RESERVED`, `SOLD`). |
-| `PUT` | `/api/v1/lands/{id}` | Owner (JWT) | Edits a listing's `title`, `description`, `price` and `contactInfo` (geometry/area are immutable; `SOLD` lots cannot be edited). |
+| `PUT` | `/api/v1/lands/{id}` | Owner (JWT) | Edits a listing's `title`, `description`, `price` and `contactInfo` (geometry/area are immutable; `RESERVED` and `SOLD` lots cannot be edited). |
 | `DELETE` | `/api/v1/lands/{id}` | Owner (JWT) | Removes a land lot listing (`204 No Content`). |
 | `POST` | `/api/v1/auth/register` | Public | Creates a new user account and returns a signed JWT. |
 | `POST` | `/api/v1/auth/login` | Public | Authenticates user credentials and returns a signed JWT. |

@@ -487,7 +487,7 @@ describe('Edit Listing & User Profile Features', () => {
     });
   });
 
-  it('shows Edit Listing only for the owner of a non-sold lot', () => {
+  it('shows Edit Listing only for the owner of an AVAILABLE lot (not RESERVED or SOLD)', () => {
     const onEdit = vi.fn();
     const { rerender } = render(
       <LandDetailsPopup
@@ -502,6 +502,19 @@ describe('Edit Listing & User Profile Features', () => {
     );
     fireEvent.click(screen.getByText(/Edit Listing/i));
     expect(onEdit).toHaveBeenCalledWith(sampleLot);
+
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'RESERVED' }}
+        currentUser={owner}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onEdit={onEdit}
+        onSubmitProposal={vi.fn()}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
 
     rerender(
       <LandDetailsPopup
@@ -537,6 +550,7 @@ describe('Edit Listing & User Profile Features', () => {
     ]);
     vi.spyOn(apiService, 'fetchMyLands').mockResolvedValue([
       sampleLot,
+      { ...sampleLot, id: 'lot-reserved', title: 'Reserved Plot', status: 'RESERVED' },
       { ...sampleLot, id: 'lot-sold', title: 'Sold Plot', status: 'SOLD' },
     ]);
     const onViewLand = vi.fn();
@@ -555,9 +569,11 @@ describe('Edit Listing & User Profile Features', () => {
     fireEvent.click(screen.getByLabelText(/View Pending Farm on map/i));
     expect(onViewLand).toHaveBeenCalledWith('lot-9');
 
-    fireEvent.click(screen.getByRole('tab', { name: /My Listings \(2\)/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /My Listings \(3\)/i }));
     expect(screen.getByText('Golden Valley Plot')).toBeInTheDocument();
+    expect(screen.getByText('Reserved Plot')).toBeInTheDocument();
     expect(screen.getByText('Sold Plot')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Edit Reserved Plot/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Edit Sold Plot/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText(/Edit Golden Valley Plot/i));
@@ -666,7 +682,7 @@ describe('Edit Listing & User Profile Features', () => {
     expect(screen.getByText(/Make Purchase Offer/i)).toBeInTheDocument();
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
 
-    // 3. RESERVED lot viewed by Owner (with 3 offers) -> can Edit, Mark as Sold, or Reopen as Available
+    // 3. RESERVED lot viewed by Owner (with 3 offers) -> CANNOT Edit, can Mark as Sold or Reopen as Available
     rerender(
       <LandDetailsPopup
         land={{ ...sampleLot, status: 'RESERVED', proposalCount: 3 }}
@@ -680,7 +696,7 @@ describe('Edit Listing & User Profile Features', () => {
       />
     );
     expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 3 offers');
-    expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Reopen as Available/i)).toBeInTheDocument();
     expect(screen.getByText(/Mark as Sold \(Close Deal\)/i)).toBeInTheDocument();
 
@@ -787,7 +803,8 @@ describe('Edit Listing & User Profile Features', () => {
     const popup = await screen.findByTestId('land-details-popup');
     expect(popup).toHaveTextContent('AVAILABLE');
     expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 1 offer');
-    // While AVAILABLE (no accepted offer), Mark as Sold and Reopen as Available MUST NOT be visible!
+    // While AVAILABLE (no accepted offer), Edit Listing is visible, while Mark as Sold and Reopen as Available MUST NOT be visible!
+    expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
     expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
 
@@ -804,8 +821,9 @@ describe('Edit Listing & User Profile Features', () => {
     });
     fireEvent.click(screen.getByText('Close'));
 
-    // Now that the offer was accepted, the popup reflects RESERVED and shows "Mark as Sold (Close Deal)" & "Reopen as Available"
+    // Now that the offer was accepted, the popup reflects RESERVED, hides "Edit Listing", and shows "Mark as Sold (Close Deal)" & "Reopen as Available"
     expect(await screen.findByTestId('land-details-popup')).toHaveTextContent('RESERVED');
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Mark as Sold \(Close Deal\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Reopen as Available/i)).toBeInTheDocument();
 

@@ -138,8 +138,8 @@ public class LandLotService {
             throw new BusinessRuleException("Only the owner of the land lot can edit this listing.");
         }
 
-        if (landLot.getStatus() == LandStatus.SOLD) {
-            throw new BusinessRuleException("Sold land lots can no longer be edited.");
+        if (landLot.getStatus() != LandStatus.AVAILABLE) {
+            throw new BusinessRuleException("Reserved or sold land lots can no longer be edited.");
         }
 
         landLot.setTitle(request.title().trim());

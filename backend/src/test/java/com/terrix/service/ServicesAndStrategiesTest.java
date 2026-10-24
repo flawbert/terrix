@@ -228,6 +228,10 @@ class ServicesAndStrategiesTest {
         assertEquals("new contact", updated.contactInfo());
         assertEquals(new BigDecimal("80.00"), updated.pricePerSqMeter());
 
+        lot.setStatus(LandStatus.RESERVED);
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), request, "owner@terrix.io"));
+
         lot.setStatus(LandStatus.SOLD);
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.updateLandLot(lot.getId(), request, "owner@terrix.io"));
@@ -300,14 +304,16 @@ class ServicesAndStrategiesTest {
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "owner@terrix.io"));
 
-        // 3. AVAILABLE -> RESERVED -> Edit while RESERVED (allowed for owner, blocked for others)
+        // 3. AVAILABLE -> RESERVED -> Edit while RESERVED must be strictly blocked even for the owner!
         landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io");
         UpdateLandLotRequest editReq = new UpdateLandLotRequest("Updated While Reserved", "New Desc", new BigDecimal("125000"), "contact");
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.updateLandLot(lot.getId(), editReq, "stranger@terrix.io"));
-        LandLotResponse editedReserved = landLotService.updateLandLot(lot.getId(), editReq, "owner@terrix.io");
-        assertEquals("Updated While Reserved", editedReserved.title());
-        assertEquals(LandStatus.RESERVED, editedReserved.status());
+        BusinessRuleException editReservedEx = assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), editReq, "owner@terrix.io"));
+        assertTrue(editReservedEx.getMessage().toLowerCase().contains("reserved"));
+        assertEquals("Status Lot", lot.getTitle());
+        assertEquals(LandStatus.RESERVED, lot.getStatus());
 
         // 4. RESERVED -> SOLD (closing deal is allowed for owner once lot has an accepted offer / is RESERVED)
         LandLotResponse soldRes = landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "owner@terrix.io");
