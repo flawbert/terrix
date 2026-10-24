@@ -63,19 +63,37 @@ export const App: React.FC = () => {
     try {
       const data = await apiService.fetchAllLands();
       setLands(data);
+      setSelectedLand((prev) => (prev ? data.find((lot) => lot.id === prev.id) ?? prev : null));
     } catch (err: any) {
       setBannerMessage(err.message || 'Could not load land lots.');
     }
   }, []);
 
+  const loadReceivedProposals = useCallback(async () => {
+    if (!currentUser) {
+      setProposals([]);
+      return;
+    }
+    try {
+      const list = await apiService.fetchReceivedProposals();
+      if (Array.isArray(list)) {
+        setProposals(list);
+      }
+    } catch {
+      // Background notification check should not overwrite map banners
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     loadAllLands();
+    loadReceivedProposals();
     return subscribeToLandLotChanges(() => {
       if (!activeCircleFilter) {
         loadAllLands();
       }
+      loadReceivedProposals();
     });
-  }, [loadAllLands, activeCircleFilter]);
+  }, [loadAllLands, loadReceivedProposals, activeCircleFilter]);
 
   const handlePolygonDrawn = useCallback((geometry: GeoJsonPolygon, areaSqm: number) => {
     setMode('VIEW');
@@ -146,6 +164,8 @@ export const App: React.FC = () => {
     const updated = await apiService.updateLandStatus(id, status);
     setSelectedLand(updated);
     await loadAllLands();
+    await loadReceivedProposals();
+    setProfileRefreshKey((k) => k + 1);
     notifyLandLotChange();
     setBannerMessage(`Land lot "${updated.title}" marked as ${status}.`);
   };
@@ -205,6 +225,9 @@ export const App: React.FC = () => {
     await loadAllLands();
     notifyLandLotChange();
   };
+
+  const pendingProposalsCount = proposals.filter((p) => p.status === 'PENDING').length;
+  const hasPendingProposals = pendingProposalsCount > 0;
 
   const displayedLands = lands.filter((lot) => {
     if (statusFilter && lot.status !== statusFilter) return false;
@@ -317,10 +340,21 @@ export const App: React.FC = () => {
               <button
                 type="button"
                 onClick={handleOpenInbox}
-                className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 flex items-center gap-1.5"
+                className="relative px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 flex items-center gap-1.5"
               >
                 <Inbox className="w-3.5 h-3.5" />
                 Proposals Inbox
+                {hasPendingProposals && (
+                  <span
+                    data-testid="proposals-inbox-notification-dot"
+                    aria-label="New proposal notification"
+                    title={`${pendingProposalsCount} pending proposal(s)`}
+                    className="absolute -top-1 -right-1 flex h-3 w-3"
+                  >
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-slate-900" />
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -385,7 +419,13 @@ export const App: React.FC = () => {
 
         {selectedLand && (
           <LandDetailsPopup
-            land={selectedLand}
+            land={{
+              ...selectedLand,
+              proposalCount: Math.max(
+                selectedLand.proposalCount ?? 0,
+                proposals.filter((p) => p.landLotId === selectedLand.id).length
+              ),
+            }}
             currentUser={currentUser}
             onClose={() => setSelectedLand(null)}
             onDelete={handleDeleteLand}
@@ -393,6 +433,8 @@ export const App: React.FC = () => {
             onEdit={(land) => setEditingLand(land)}
             onSubmitProposal={async (landId, price, msg) => {
               await apiService.submitProposal(landId, price, msg);
+              await loadAllLands();
+              await loadReceivedProposals();
               notifyLandLotChange();
             }}
             onRequireAuth={() => setShowAuthModal(true)}

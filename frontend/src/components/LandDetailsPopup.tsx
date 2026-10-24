@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Phone, User, Calendar, DollarSign, Maximize2, Send, Trash2, BadgeCheck, RotateCcw, Pencil } from 'lucide-react';
+import { X, Phone, User, Calendar, DollarSign, Maximize2, Send, Trash2, BadgeCheck, RotateCcw, Pencil, Inbox } from 'lucide-react';
 import { AuthUser, LandLot, LandStatus } from '../types/land';
 import { formatArea, formatCurrency } from '../utils/formatters';
 
@@ -30,7 +30,8 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isOwner = currentUser && currentUser.userId === land.ownerId;
+  const isOwner = Boolean(currentUser && currentUser.userId === land.ownerId);
+  const offerCount = land.proposalCount ?? 0;
 
   const handleProposalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +114,17 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
           <Calendar className="w-4 h-4 shrink-0" />
           <span>Listed on {new Date(land.createdAt).toLocaleDateString('en-US')}</span>
         </div>
+        {isOwner && (
+          <div
+            data-testid="land-offers-count"
+            className="flex items-center gap-2 text-amber-300 font-semibold pt-1"
+          >
+            <Inbox className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Offers received: {offerCount} {offerCount === 1 ? 'offer' : 'offers'}
+            </span>
+          </div>
+        )}
       </div>
 
       {feedback && (
@@ -150,7 +162,7 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
           </button>
         )}
 
-        {isOwner && onUpdateStatus && land.status !== 'SOLD' && (
+        {isOwner && onUpdateStatus && land.status === 'RESERVED' && (
           <button
             type="button"
             onClick={() => onUpdateStatus(land.id, 'SOLD')}
@@ -161,7 +173,7 @@ export const LandDetailsPopup: React.FC<LandDetailsPopupProps> = ({
           </button>
         )}
 
-        {isOwner && onUpdateStatus && land.status !== 'AVAILABLE' && (
+        {isOwner && onUpdateStatus && land.status === 'RESERVED' && (
           <button
             type="button"
             onClick={() => onUpdateStatus(land.id, 'AVAILABLE')}

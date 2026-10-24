@@ -1,9 +1,12 @@
 package com.terrix.service;
 
 import com.terrix.domain.entity.LandLot;
+import com.terrix.domain.entity.Proposal;
 import com.terrix.domain.entity.User;
 import com.terrix.domain.enums.LandStatus;
+import com.terrix.domain.enums.ProposalStatus;
 import com.terrix.domain.repository.LandLotRepository;
+import com.terrix.domain.repository.ProposalRepository;
 import com.terrix.dto.request.CreateLandLotRequest;
 import com.terrix.dto.request.GeoJsonPolygonDto;
 import com.terrix.dto.request.UpdateLandLotRequest;
@@ -13,6 +16,7 @@ import com.terrix.exception.ResourceNotFoundException;
 import com.terrix.service.strategy.LandValidationStrategy;
 import com.terrix.util.GeometryUtils;
 import org.locationtech.jts.geom.Polygon;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,14 +32,25 @@ public class LandLotService {
     private final LandLotRepository landLotRepository;
     private final AuthService authService;
     private final List<LandValidationStrategy> validationStrategies;
+    private final ProposalRepository proposalRepository;
 
     public LandLotService(
             LandLotRepository landLotRepository,
             AuthService authService,
             List<LandValidationStrategy> validationStrategies) {
+        this(landLotRepository, authService, validationStrategies, null);
+    }
+
+    @Autowired
+    public LandLotService(
+            LandLotRepository landLotRepository,
+            AuthService authService,
+            List<LandValidationStrategy> validationStrategies,
+            ProposalRepository proposalRepository) {
         this.landLotRepository = landLotRepository;
         this.authService = authService;
         this.validationStrategies = validationStrategies;
+        this.proposalRepository = proposalRepository;
     }
 
     @Transactional
@@ -142,8 +157,26 @@ public class LandLotService {
         LandLot landLot = landLotRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Land lot not found with id: " + id));
 
-        if (!landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
+        if (authenticatedEmail == null || !landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
             throw new BusinessRuleException("Only the owner of the land lot can change its status.");
+        }
+
+        if (landLot.getStatus() == LandStatus.SOLD) {
+            throw new BusinessRuleException("Sold land lots cannot be reopened or have their status changed.");
+        }
+
+        if (newStatus == LandStatus.SOLD && landLot.getStatus() != LandStatus.RESERVED) {
+            throw new BusinessRuleException("A land lot can only be marked as SOLD after a purchase proposal has been accepted.");
+        }
+
+        if (landLot.getStatus() == LandStatus.RESERVED && newStatus == LandStatus.AVAILABLE && proposalRepository != null) {
+            List<Proposal> lotProposals = proposalRepository.findByLandLotIdWithDetails(id);
+            for (Proposal proposal : lotProposals) {
+                if (proposal.getStatus() == ProposalStatus.ACCEPTED) {
+                    proposal.setStatus(ProposalStatus.REJECTED);
+                    proposalRepository.save(proposal);
+                }
+            }
         }
 
         landLot.setStatus(newStatus);
@@ -157,7 +190,7 @@ public class LandLotService {
         LandLot landLot = landLotRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Land lot not found with id: " + id));
 
-        if (!landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
+        if (authenticatedEmail == null || !landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
             throw new BusinessRuleException("Only the owner of the land lot can delete this listing.");
         }
         landLotRepository.delete(landLot);
@@ -176,6 +209,10 @@ public class LandLotService {
             );
         }
 
+        long proposalCount = (proposalRepository != null && landLot.getId() != null)
+                ? proposalRepository.countByLandLotId(landLot.getId())
+                : 0L;
+
         return new LandLotResponse(
                 landLot.getId(),
                 landLot.getTitle(),
@@ -188,7 +225,8 @@ public class LandLotService {
                 geoJson,
                 landLot.getOwner().getId(),
                 landLot.getOwner().getName(),
-                landLot.getCreatedAt()
+                landLot.getCreatedAt(),
+                proposalCount
         );
     }
 }

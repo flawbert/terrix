@@ -19,5 +19,37 @@ public record LandLotResponse(
         GeoJsonPolygonDto geometry,
         UUID ownerId,
         String ownerName,
-        OffsetDateTime createdAt
-) {}
+        OffsetDateTime createdAt,
+        long proposalCount
+) {
+    public LandLotResponse(
+            UUID id,
+            String title,
+            String description,
+            BigDecimal price,
+            Double areaSqMeters,
+            BigDecimal pricePerSqMeter,
+            String contactInfo,
+            LandStatus status,
+            GeoJsonPolygonDto geometry,
+            UUID ownerId,
+            String ownerName,
+            OffsetDateTime createdAt
+    ) {
+        this(
+                id,
+                title,
+                description,
+                price,
+                areaSqMeters,
+                pricePerSqMeter,
+                contactInfo,
+                status,
+                geometry,
+                ownerId,
+                ownerName,
+                createdAt,
+                0L
+        );
+    }
+}

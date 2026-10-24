@@ -614,11 +614,214 @@ describe('Edit Listing & User Profile Features', () => {
     expect(await screen.findByText(/updated successfully/i)).toBeInTheDocument();
     expect(screen.queryByTestId('edit-land-modal')).not.toBeInTheDocument();
 
-    // View a reservation whose lot is not loaded locally → fetched by id
+    // Openprofile / View a reservation whose lot is not loaded locally → fetched by id
     fireEvent.click(screen.getByRole('tab', { name: /My Reservations/i }));
     fireEvent.click(await screen.findByLabelText(/View Remote Farm on map/i));
     expect(await screen.findByTestId('land-details-popup')).toHaveTextContent('Remote Farm');
     expect(screen.queryByTestId('user-profile-modal')).not.toBeInTheDocument();
     expect(apiService.fetchLandById).toHaveBeenCalledWith('remote-lot');
+  });
+
+  it('enforces all land status rules (AVAILABLE, RESERVED, SOLD) and shows offer count only to owner', async () => {
+    const onUpdateStatus = vi.fn().mockResolvedValue(undefined);
+    const onEdit = vi.fn();
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    const onSubmitProposal = vi.fn().mockResolvedValue(undefined);
+    const buyer = { token: 'jwt-b', userId: 'buyer-2', name: 'Bob Buyer', email: 'bob@terrix.io' };
+
+    // 1. AVAILABLE lot viewed by Owner (with 1 pending offer, not yet accepted) -> CANNOT mark as Sold yet!
+    const { rerender } = render(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'AVAILABLE', proposalCount: 1 }}
+        currentUser={owner}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+        onUpdateStatus={onUpdateStatus}
+        onEdit={onEdit}
+        onSubmitProposal={onSubmitProposal}
+        onRequireAuth={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 1 offer');
+    expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Make Purchase Offer/i)).not.toBeInTheDocument();
+
+    // 2. AVAILABLE lot viewed by Buyer -> cannot see owner's offer count or owner actions, can make offer
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'AVAILABLE', proposalCount: 3 }}
+        currentUser={buyer}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+        onUpdateStatus={onUpdateStatus}
+        onEdit={onEdit}
+        onSubmitProposal={onSubmitProposal}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.queryByTestId('land-offers-count')).not.toBeInTheDocument();
+    expect(screen.getByText(/Make Purchase Offer/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+
+    // 3. RESERVED lot viewed by Owner (with 3 offers) -> can Edit, Mark as Sold, or Reopen as Available
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'RESERVED', proposalCount: 3 }}
+        currentUser={owner}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+        onUpdateStatus={onUpdateStatus}
+        onEdit={onEdit}
+        onSubmitProposal={onSubmitProposal}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 3 offers');
+    expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reopen as Available/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mark as Sold \(Close Deal\)/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Reopen as Available/i));
+    expect(onUpdateStatus).toHaveBeenCalledWith('lot-123', 'AVAILABLE');
+
+    fireEvent.click(screen.getByText(/Mark as Sold \(Close Deal\)/i));
+    expect(onUpdateStatus).toHaveBeenCalledWith('lot-123', 'SOLD');
+
+    // 4. RESERVED lot viewed by Buyer -> cannot make purchase offer or edit
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'RESERVED', proposalCount: 3 }}
+        currentUser={buyer}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+        onUpdateStatus={onUpdateStatus}
+        onEdit={onEdit}
+        onSubmitProposal={onSubmitProposal}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/Make Purchase Offer/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('land-offers-count')).not.toBeInTheDocument();
+
+    // 5. SOLD lot viewed by Owner -> CANNOT Reopen as Available, CANNOT Edit, CANNOT Mark as Sold
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'SOLD', proposalCount: 2 }}
+        currentUser={owner}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+        onUpdateStatus={onUpdateStatus}
+        onEdit={onEdit}
+        onSubmitProposal={onSubmitProposal}
+        onRequireAuth={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 2 offers');
+    expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mark as Sold/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Remove My Listing/i)).toBeInTheDocument();
+  });
+
+  it('displays red notification dot on Proposals Inbox when pending proposals exist and clears it once evaluated', async () => {
+    setStoredUser(owner);
+    vi.spyOn(apiService, 'fetchAllLands').mockResolvedValue([
+      { ...sampleLot, proposalCount: 1 },
+    ]);
+    const fetchProposalsSpy = vi
+      .spyOn(apiService, 'fetchReceivedProposals')
+      .mockResolvedValue([sampleProposal]);
+    vi.spyOn(apiService, 'evaluateProposal').mockResolvedValue({
+      ...sampleProposal,
+      status: 'ACCEPTED',
+    });
+
+    render(<App />);
+
+    // Notification red dot should appear automatically because sampleProposal is PENDING
+    expect(await screen.findByTestId('proposals-inbox-notification-dot')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Proposals Inbox/i));
+    expect(await screen.findByText(/Received Purchase Proposals/i)).toBeInTheDocument();
+
+    // When owner accepts the pending proposal, fetchReceivedProposals returns ACCEPTED -> red dot disappears
+    fetchProposalsSpy.mockResolvedValue([
+      { ...sampleProposal, status: 'ACCEPTED' },
+    ]);
+    fireEvent.click(screen.getByLabelText(/Accept proposal/i));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('proposals-inbox-notification-dot')).not.toBeInTheDocument();
+    });
+  });
+
+  it('only shows Mark as Sold after accepting an offer (AVAILABLE -> RESERVED -> SOLD) and prevents reopening once SOLD', async () => {
+    setStoredUser(owner);
+    const availableLot: LandLot = { ...sampleLot, status: 'AVAILABLE', proposalCount: 1 };
+    const reservedLot: LandLot = { ...sampleLot, status: 'RESERVED', proposalCount: 1 };
+    const soldLot: LandLot = { ...sampleLot, status: 'SOLD', proposalCount: 1 };
+
+    const fetchLandsSpy = vi.spyOn(apiService, 'fetchAllLands').mockResolvedValue([availableLot]);
+    const fetchProposalsSpy = vi
+      .spyOn(apiService, 'fetchReceivedProposals')
+      .mockResolvedValue([sampleProposal]);
+    vi.spyOn(apiService, 'fetchMyProposals').mockResolvedValue([]);
+    vi.spyOn(apiService, 'fetchMyLands').mockResolvedValue([availableLot]);
+    vi.spyOn(apiService, 'evaluateProposal').mockResolvedValue({
+      ...sampleProposal,
+      status: 'ACCEPTED',
+    });
+    const updateStatusSpy = vi.spyOn(apiService, 'updateLandStatus').mockResolvedValue(soldLot);
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/1 lots visible/i)).toBeInTheDocument());
+
+    // 1. Open profile -> My Listings -> View AVAILABLE lot on map
+    fireEvent.click(screen.getByLabelText(/Open my profile/i));
+    fireEvent.click(screen.getByRole('tab', { name: /My Listings/i }));
+    fireEvent.click(await screen.findByLabelText(/View Golden Valley Plot on map/i));
+
+    const popup = await screen.findByTestId('land-details-popup');
+    expect(popup).toHaveTextContent('AVAILABLE');
+    expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 1 offer');
+    // While AVAILABLE (no accepted offer), Mark as Sold and Reopen as Available MUST NOT be visible!
+    expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
+
+    // 2. Owner opens Proposals Inbox and accepts the buyer's proposal -> lot transitions to RESERVED
+    fireEvent.click(screen.getByText(/Proposals Inbox/i));
+    expect(await screen.findByText(/Received Purchase Proposals/i)).toBeInTheDocument();
+
+    fetchLandsSpy.mockResolvedValue([reservedLot]);
+    fetchProposalsSpy.mockResolvedValue([{ ...sampleProposal, status: 'ACCEPTED' }]);
+    fireEvent.click(screen.getByLabelText(/Accept proposal/i));
+
+    await waitFor(() => {
+      expect(apiService.evaluateProposal).toHaveBeenCalledWith('prop-1', true);
+    });
+    fireEvent.click(screen.getByText('Close'));
+
+    // Now that the offer was accepted, the popup reflects RESERVED and shows "Mark as Sold (Close Deal)" & "Reopen as Available"
+    expect(await screen.findByTestId('land-details-popup')).toHaveTextContent('RESERVED');
+    expect(screen.getByText(/Mark as Sold \(Close Deal\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reopen as Available/i)).toBeInTheDocument();
+
+    // 3. Owner clicks "Mark as Sold (Close Deal)" -> lot transitions to SOLD
+    fetchLandsSpy.mockResolvedValue([soldLot]);
+    fireEvent.click(screen.getByText(/Mark as Sold \(Close Deal\)/i));
+
+    await waitFor(() => {
+      expect(updateStatusSpy).toHaveBeenCalledWith('lot-123', 'SOLD');
+    });
+
+    expect(await screen.findByText(/marked as SOLD/i)).toBeInTheDocument();
+    expect(screen.getByTestId('land-details-popup')).toHaveTextContent('SOLD');
+    // Once SOLD, Mark as Sold, Reopen as Available, and Edit Listing buttons must no longer exist
+    expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
   });
 });

@@ -18,4 +18,6 @@ public interface ProposalRepository extends JpaRepository<Proposal, UUID> {
 
     @Query("SELECT p FROM Proposal p JOIN FETCH p.buyer b JOIN FETCH p.landLot WHERE b.id = :buyerId ORDER BY p.createdAt DESC")
     List<Proposal> findSentProposalsByBuyerId(@Param("buyerId") UUID buyerId);
+
+    long countByLandLotId(UUID landLotId);
 }

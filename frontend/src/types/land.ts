@@ -19,6 +19,7 @@ export interface LandLot {
   ownerId: string;
   ownerName: string;
   createdAt: string;
+  proposalCount?: number;
 }
 
 export interface CreateLandLotPayload {

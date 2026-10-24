@@ -91,7 +91,7 @@ public class ProposalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Proposal not found with id: " + proposalId));
 
         LandLot landLot = proposal.getLandLot();
-        if (!landLot.getOwner().getEmail().equalsIgnoreCase(ownerEmail)) {
+        if (ownerEmail == null || !landLot.getOwner().getEmail().equalsIgnoreCase(ownerEmail)) {
             throw new BusinessRuleException("Only the owner of the land lot can accept or reject proposals.");
         }
 
@@ -99,7 +99,14 @@ public class ProposalService {
             throw new BusinessRuleException("This proposal has already been evaluated.");
         }
 
+        if (landLot.getStatus() == LandStatus.SOLD) {
+            throw new BusinessRuleException("Cannot evaluate proposals for a land lot that has already been sold.");
+        }
+
         if (accept) {
+            if (landLot.getStatus() != LandStatus.AVAILABLE) {
+                throw new BusinessRuleException("Proposals can only be accepted when the land lot is AVAILABLE.");
+            }
             proposal.setStatus(ProposalStatus.ACCEPTED);
             landLot.setStatus(LandStatus.RESERVED);
             landLot.setUpdatedAt(OffsetDateTime.now());

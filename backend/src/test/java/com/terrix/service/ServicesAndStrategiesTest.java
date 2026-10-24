@@ -60,7 +60,7 @@ class ServicesAndStrategiesTest {
         PolygonOverlapValidationStrategy overlapStrategy = new PolygonOverlapValidationStrategy(landLotRepository);
         MinimumAreaValidationStrategy areaStrategy = new MinimumAreaValidationStrategy(landLotRepository);
 
-        landLotService = new LandLotService(landLotRepository, authService, List.of(overlapStrategy, areaStrategy));
+        landLotService = new LandLotService(landLotRepository, authService, List.of(overlapStrategy, areaStrategy), proposalRepository);
         proposalService = new ProposalService(proposalRepository, landLotRepository, userRepository);
 
         samplePolygon = GeometryUtils.toPolygon(List.of(List.of(
@@ -135,6 +135,9 @@ class ServicesAndStrategiesTest {
 
         when(landLotRepository.existsOverlappingLand(any())).thenReturn(false);
         when(landLotRepository.calculateGeodesicAreaSqMeters(any())).thenReturn(2.0);
+        assertThrows(InvalidGeometryException.class, () -> landLotService.createLandLot(request, null));
+
+        when(landLotRepository.calculateGeodesicAreaSqMeters(any())).thenReturn(60_000_000.0);
         assertThrows(InvalidGeometryException.class, () -> landLotService.createLandLot(request, null));
     }
 
@@ -262,5 +265,126 @@ class ServicesAndStrategiesTest {
 
         when(userRepository.findByEmailIgnoreCase("ghost@terrix.io")).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class, () -> proposalService.listProposalsForBuyer("ghost@terrix.io"));
+    }
+
+    @Test
+    void shouldEnforceAllLandStatusTransitionsAndPreventReopeningSoldLand() {
+        User owner = new User(UUID.randomUUID(), "Owner", "owner@terrix.io", "hash");
+        User buyer = new User(UUID.randomUUID(), "Buyer", "buyer@terrix.io", "hash");
+        LandLot lot = new LandLot(UUID.randomUUID(), "Status Lot", "Desc", new BigDecimal("120000"),
+                2000.0, "owner@terrix.io", LandStatus.AVAILABLE, samplePolygon, owner);
+
+        Proposal acceptedProposal = new Proposal(UUID.randomUUID(), lot, buyer, new BigDecimal("118000"), "Accepted offer");
+        acceptedProposal.setStatus(ProposalStatus.ACCEPTED);
+
+        when(landLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        when(landLotRepository.save(any(LandLot.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(proposalRepository.countByLandLotId(lot.getId())).thenReturn(3L);
+        when(proposalRepository.findByLandLotIdWithDetails(lot.getId())).thenReturn(List.of(acceptedProposal));
+
+        // 0. AVAILABLE -> SOLD directly (without an accepted offer / RESERVED status) must be blocked!
+        BusinessRuleException directSoldEx = assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "owner@terrix.io"));
+        assertTrue(directSoldEx.getMessage().toLowerCase().contains("proposal"));
+        assertEquals(LandStatus.AVAILABLE, lot.getStatus());
+
+        // 1. AVAILABLE -> RESERVED (when offer is accepted)
+        LandLotResponse reservedRes = landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io");
+        assertEquals(LandStatus.RESERVED, reservedRes.status());
+        assertEquals(3L, reservedRes.proposalCount());
+
+        // 2. RESERVED -> AVAILABLE (reopening a reserved lot cancels the accepted proposal and blocks marking as SOLD again)
+        LandLotResponse reopenedRes = landLotService.updateLandStatus(lot.getId(), LandStatus.AVAILABLE, "owner@terrix.io");
+        assertEquals(LandStatus.AVAILABLE, reopenedRes.status());
+        assertEquals(ProposalStatus.REJECTED, acceptedProposal.getStatus());
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "owner@terrix.io"));
+
+        // 3. AVAILABLE -> RESERVED -> Edit while RESERVED (allowed for owner, blocked for others)
+        landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io");
+        UpdateLandLotRequest editReq = new UpdateLandLotRequest("Updated While Reserved", "New Desc", new BigDecimal("125000"), "contact");
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), editReq, "stranger@terrix.io"));
+        LandLotResponse editedReserved = landLotService.updateLandLot(lot.getId(), editReq, "owner@terrix.io");
+        assertEquals("Updated While Reserved", editedReserved.title());
+        assertEquals(LandStatus.RESERVED, editedReserved.status());
+
+        // 4. RESERVED -> SOLD (closing deal is allowed for owner once lot has an accepted offer / is RESERVED)
+        LandLotResponse soldRes = landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "owner@terrix.io");
+        assertEquals(LandStatus.SOLD, soldRes.status());
+
+        // 5. Once SOLD, reopening as AVAILABLE or changing status to RESERVED must be strictly blocked!
+        BusinessRuleException reopenEx = assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandStatus(lot.getId(), LandStatus.AVAILABLE, "owner@terrix.io"));
+        assertTrue(reopenEx.getMessage().toLowerCase().contains("sold"));
+
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io"));
+        assertEquals(LandStatus.SOLD, lot.getStatus());
+
+        // 6. Once SOLD, editing the land lot is strictly blocked even for the owner
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.updateLandLot(lot.getId(), editReq, "owner@terrix.io"));
+    }
+
+    @Test
+    void shouldEnforceProposalRulesAcrossAllLandStatuses() {
+        User owner = new User(UUID.randomUUID(), "Owner", "owner@terrix.io", "hash");
+        User buyer1 = new User(UUID.randomUUID(), "Buyer 1", "buyer1@terrix.io", "hash");
+        User buyer2 = new User(UUID.randomUUID(), "Buyer 2", "buyer2@terrix.io", "hash");
+        LandLot lot = new LandLot(UUID.randomUUID(), "Negotiation Lot", "Desc", new BigDecimal("90000"),
+                1500.0, "owner@terrix.io", LandStatus.AVAILABLE, samplePolygon, owner);
+
+        when(userRepository.findByEmailIgnoreCase("owner@terrix.io")).thenReturn(Optional.of(owner));
+        when(userRepository.findByEmailIgnoreCase("buyer1@terrix.io")).thenReturn(Optional.of(buyer1));
+        when(userRepository.findByEmailIgnoreCase("buyer2@terrix.io")).thenReturn(Optional.of(buyer2));
+        when(landLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        when(landLotRepository.save(any(LandLot.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(proposalRepository.save(any(Proposal.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateProposalRequest offerReq = new CreateProposalRequest(new BigDecimal("85000"), "Offer");
+
+        // Owner cannot submit a proposal on their own AVAILABLE land lot
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.createProposal(lot.getId(), offerReq, "owner@terrix.io"));
+
+        // Two buyers submit proposals while lot is AVAILABLE
+        Proposal p1 = new Proposal(UUID.randomUUID(), lot, buyer1, new BigDecimal("85000"), "Offer 1");
+        Proposal p2 = new Proposal(UUID.randomUUID(), lot, buyer2, new BigDecimal("88000"), "Offer 2");
+        Proposal p3 = new Proposal(UUID.randomUUID(), lot, buyer2, new BigDecimal("89000"), "Offer 3");
+        when(proposalRepository.findById(p1.getId())).thenReturn(Optional.of(p1));
+        when(proposalRepository.findById(p2.getId())).thenReturn(Optional.of(p2));
+        when(proposalRepository.findById(p3.getId())).thenReturn(Optional.of(p3));
+
+        // Non-owner cannot evaluate proposals
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.evaluateProposal(p1.getId(), true, "buyer1@terrix.io"));
+
+        // Owner rejects p1 -> p1 becomes REJECTED, lot stays AVAILABLE
+        ProposalResponse rejected = proposalService.evaluateProposal(p1.getId(), false, "owner@terrix.io");
+        assertEquals(ProposalStatus.REJECTED, rejected.status());
+        assertEquals(LandStatus.AVAILABLE, lot.getStatus());
+
+        // Owner accepts p2 -> p2 becomes ACCEPTED, lot transitions to RESERVED
+        ProposalResponse accepted = proposalService.evaluateProposal(p2.getId(), true, "owner@terrix.io");
+        assertEquals(ProposalStatus.ACCEPTED, accepted.status());
+        assertEquals(LandStatus.RESERVED, lot.getStatus());
+
+        // While lot is RESERVED, buyers CANNOT submit new proposals
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.createProposal(lot.getId(), offerReq, "buyer1@terrix.io"));
+
+        // While lot is RESERVED, owner CANNOT accept another pending proposal (p3)
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.evaluateProposal(p3.getId(), true, "owner@terrix.io"));
+
+        // When lot becomes SOLD, buyers CANNOT submit proposals and owner CANNOT evaluate proposals
+        lot.setStatus(LandStatus.SOLD);
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.createProposal(lot.getId(), offerReq, "buyer1@terrix.io"));
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.evaluateProposal(p3.getId(), false, "owner@terrix.io"));
+        assertThrows(BusinessRuleException.class,
+                () -> proposalService.evaluateProposal(p3.getId(), true, "owner@terrix.io"));
     }
 }

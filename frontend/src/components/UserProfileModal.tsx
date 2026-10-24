@@ -206,7 +206,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <p className="text-sm font-bold text-white truncate">{lot.title}</p>
                     <p className="text-xs text-emerald-400 font-semibold">
                       {formatCurrency(lot.price)}
-                      <span className="text-slate-400 font-normal"> · {formatArea(lot.areaSqMeters)}</span>
+                      <span className="text-slate-400 font-normal">
+                        {' '}· {formatArea(lot.areaSqMeters)} · {lot.proposalCount ?? 0}{' '}
+                        {(lot.proposalCount ?? 0) === 1 ? 'offer' : 'offers'} received
+                      </span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
