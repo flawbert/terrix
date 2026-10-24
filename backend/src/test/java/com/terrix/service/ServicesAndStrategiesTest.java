@@ -163,10 +163,16 @@ class ServicesAndStrategiesTest {
 
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.deleteLandLot(lot.getId(), "other@terrix.io"));
+        assertThrows(BusinessRuleException.class,
+                () -> landLotService.deleteLandLot(lot.getId(), null));
 
         when(landLotRepository.save(any(LandLot.class))).thenAnswer(inv -> inv.getArgument(0));
         assertEquals(LandStatus.RESERVED, landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io").status());
         assertThrows(BusinessRuleException.class, () -> landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "other@terrix.io"));
+        assertThrows(BusinessRuleException.class, () -> landLotService.deleteLandLot(lot.getId(), "owner@terrix.io"));
+        verify(landLotRepository, never()).delete(lot);
+
+        assertEquals(LandStatus.AVAILABLE, landLotService.updateLandStatus(lot.getId(), LandStatus.AVAILABLE, "owner@terrix.io").status());
         landLotService.deleteLandLot(lot.getId(), "owner@terrix.io");
         verify(landLotRepository).delete(lot);
     }
@@ -304,7 +310,7 @@ class ServicesAndStrategiesTest {
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.updateLandStatus(lot.getId(), LandStatus.SOLD, "owner@terrix.io"));
 
-        // 3. AVAILABLE -> RESERVED -> Edit while RESERVED must be strictly blocked even for the owner!
+        // 3. AVAILABLE -> RESERVED -> Edit and Delete while RESERVED must be strictly blocked even for the owner!
         landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io");
         UpdateLandLotRequest editReq = new UpdateLandLotRequest("Updated While Reserved", "New Desc", new BigDecimal("125000"), "contact");
         assertThrows(BusinessRuleException.class,
@@ -312,6 +318,10 @@ class ServicesAndStrategiesTest {
         BusinessRuleException editReservedEx = assertThrows(BusinessRuleException.class,
                 () -> landLotService.updateLandLot(lot.getId(), editReq, "owner@terrix.io"));
         assertTrue(editReservedEx.getMessage().toLowerCase().contains("reserved"));
+        BusinessRuleException deleteReservedEx = assertThrows(BusinessRuleException.class,
+                () -> landLotService.deleteLandLot(lot.getId(), "owner@terrix.io"));
+        assertTrue(deleteReservedEx.getMessage().toLowerCase().contains("reserved"));
+        verify(landLotRepository, never()).delete(any());
         assertEquals("Status Lot", lot.getTitle());
         assertEquals(LandStatus.RESERVED, lot.getStatus());
 
@@ -328,9 +338,13 @@ class ServicesAndStrategiesTest {
                 () -> landLotService.updateLandStatus(lot.getId(), LandStatus.RESERVED, "owner@terrix.io"));
         assertEquals(LandStatus.SOLD, lot.getStatus());
 
-        // 6. Once SOLD, editing the land lot is strictly blocked even for the owner
+        // 6. Once SOLD, editing or deleting the land lot is strictly blocked even for the owner
         assertThrows(BusinessRuleException.class,
                 () -> landLotService.updateLandLot(lot.getId(), editReq, "owner@terrix.io"));
+        BusinessRuleException deleteSoldEx = assertThrows(BusinessRuleException.class,
+                () -> landLotService.deleteLandLot(lot.getId(), "owner@terrix.io"));
+        assertTrue(deleteSoldEx.getMessage().toLowerCase().contains("sold"));
+        verify(landLotRepository, never()).delete(any());
     }
 
     @Test

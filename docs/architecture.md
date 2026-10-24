@@ -28,3 +28,9 @@
 
 ### ADR-004: Stateless JWT + sessionStorage + BroadcastChannel for Multi-User Concurrency
 - **Decision:** Use stateless JWT tokens stored in `sessionStorage` (per-tab isolation) paired with a `BroadcastChannel` synchronization utility (`liveSync.ts`) so two users can operate simultaneously in separate tabs with real-time map updates.
+
+### ADR-005: Land Lot Lifecycle State Machine & Mutation Guards (`AVAILABLE` -> `RESERVED` -> `SOLD`)
+- **Decision:** Enforce strict state-machine transitions and ownership/status guards in `LandLotService` and `ProposalService`:
+  - **Editing & Deletion (`PUT /api/v1/lands/{id}`, `DELETE /api/v1/lands/{id}`):** Allowed exclusively for the lot owner while the status is `AVAILABLE`. Once a lot is `RESERVED` or `SOLD`, editing and deletion are blocked (`422 Unprocessable Entity`) and hidden in the UI.
+  - **Proposals (`POST /api/v1/lands/{id}/proposals`, `PATCH /api/v1/proposals/{id}/evaluate`):** New offers can only be submitted on `AVAILABLE` lots by non-owners. Accepting an offer transitions the lot from `AVAILABLE` to `RESERVED`.
+  - **Closing or Reopening (`PATCH /api/v1/lands/{id}/status`):** A lot can only be marked as `SOLD` when it is currently `RESERVED` (after an accepted offer). Reopening a `RESERVED` lot (`RESERVED -> AVAILABLE`) rejects the accepted proposal. Once `SOLD`, the status is terminal and cannot be reopened or modified.

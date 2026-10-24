@@ -274,7 +274,7 @@ describe('UI Modals & Components Tests', () => {
 
     rerender(
       <LandDetailsPopup
-        land={{ ...sampleLot, status: 'RESERVED' }}
+        land={{ ...sampleLot, status: 'AVAILABLE' }}
         currentUser={{ token: 't', userId: 'owner-1', name: 'Alice', email: 'a@terrix.io' }}
         onClose={vi.fn()}
         onDelete={onDelete}
@@ -285,6 +285,19 @@ describe('UI Modals & Components Tests', () => {
 
     fireEvent.click(screen.getByText(/Remove My Listing/i));
     expect(onDelete).toHaveBeenCalledWith('lot-123');
+
+    rerender(
+      <LandDetailsPopup
+        land={{ ...sampleLot, status: 'RESERVED' }}
+        currentUser={{ token: 't', userId: 'owner-1', name: 'Alice', email: 'a@terrix.io' }}
+        onClose={vi.fn()}
+        onDelete={onDelete}
+        onSubmitProposal={onSubmitProposal}
+        onRequireAuth={onRequireAuth}
+      />
+    );
+
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
   });
 
   it('renders AuthModal and tests both Register and Login with error handling', async () => {
@@ -487,14 +500,15 @@ describe('Edit Listing & User Profile Features', () => {
     });
   });
 
-  it('shows Edit Listing only for the owner of an AVAILABLE lot (not RESERVED or SOLD)', () => {
+  it('shows Edit Listing and Remove My Listing only for the owner of an AVAILABLE lot (not RESERVED or SOLD)', () => {
     const onEdit = vi.fn();
+    const onDelete = vi.fn();
     const { rerender } = render(
       <LandDetailsPopup
         land={sampleLot}
         currentUser={owner}
         onClose={vi.fn()}
-        onDelete={vi.fn()}
+        onDelete={onDelete}
         onEdit={onEdit}
         onSubmitProposal={vi.fn()}
         onRequireAuth={vi.fn()}
@@ -502,45 +516,50 @@ describe('Edit Listing & User Profile Features', () => {
     );
     fireEvent.click(screen.getByText(/Edit Listing/i));
     expect(onEdit).toHaveBeenCalledWith(sampleLot);
+    fireEvent.click(screen.getByText(/Remove My Listing/i));
+    expect(onDelete).toHaveBeenCalledWith(sampleLot.id);
 
     rerender(
       <LandDetailsPopup
         land={{ ...sampleLot, status: 'RESERVED' }}
         currentUser={owner}
         onClose={vi.fn()}
-        onDelete={vi.fn()}
+        onDelete={onDelete}
         onEdit={onEdit}
         onSubmitProposal={vi.fn()}
         onRequireAuth={vi.fn()}
       />
     );
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
 
     rerender(
       <LandDetailsPopup
         land={{ ...sampleLot, status: 'SOLD' }}
         currentUser={owner}
         onClose={vi.fn()}
-        onDelete={vi.fn()}
+        onDelete={onDelete}
         onEdit={onEdit}
         onSubmitProposal={vi.fn()}
         onRequireAuth={vi.fn()}
       />
     );
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
 
     rerender(
       <LandDetailsPopup
         land={sampleLot}
         currentUser={{ ...owner, userId: 'someone-else' }}
         onClose={vi.fn()}
-        onDelete={vi.fn()}
+        onDelete={onDelete}
         onEdit={onEdit}
         onSubmitProposal={vi.fn()}
         onRequireAuth={vi.fn()}
       />
     );
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
   });
 
   it('renders UserProfileModal with reservations and listings tabs', async () => {
@@ -662,6 +681,7 @@ describe('Edit Listing & User Profile Features', () => {
     expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 1 offer');
     expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Remove My Listing/i)).toBeInTheDocument();
     expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Make Purchase Offer/i)).not.toBeInTheDocument();
 
@@ -681,8 +701,9 @@ describe('Edit Listing & User Profile Features', () => {
     expect(screen.queryByTestId('land-offers-count')).not.toBeInTheDocument();
     expect(screen.getByText(/Make Purchase Offer/i)).toBeInTheDocument();
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
 
-    // 3. RESERVED lot viewed by Owner (with 3 offers) -> CANNOT Edit, can Mark as Sold or Reopen as Available
+    // 3. RESERVED lot viewed by Owner (with 3 offers) -> CANNOT Edit or Remove, can Mark as Sold or Reopen as Available
     rerender(
       <LandDetailsPopup
         land={{ ...sampleLot, status: 'RESERVED', proposalCount: 3 }}
@@ -697,6 +718,7 @@ describe('Edit Listing & User Profile Features', () => {
     );
     expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 3 offers');
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Reopen as Available/i)).toBeInTheDocument();
     expect(screen.getByText(/Mark as Sold \(Close Deal\)/i)).toBeInTheDocument();
 
@@ -722,7 +744,7 @@ describe('Edit Listing & User Profile Features', () => {
     expect(screen.queryByText(/Make Purchase Offer/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('land-offers-count')).not.toBeInTheDocument();
 
-    // 5. SOLD lot viewed by Owner -> CANNOT Reopen as Available, CANNOT Edit, CANNOT Mark as Sold
+    // 5. SOLD lot viewed by Owner -> CANNOT Reopen as Available, CANNOT Edit, CANNOT Mark as Sold, CANNOT Remove
     rerender(
       <LandDetailsPopup
         land={{ ...sampleLot, status: 'SOLD', proposalCount: 2 }}
@@ -739,7 +761,7 @@ describe('Edit Listing & User Profile Features', () => {
     expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Mark as Sold/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Remove My Listing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
   });
 
   it('displays red notification dot on Proposals Inbox when pending proposals exist and clears it once evaluated', async () => {
@@ -803,8 +825,9 @@ describe('Edit Listing & User Profile Features', () => {
     const popup = await screen.findByTestId('land-details-popup');
     expect(popup).toHaveTextContent('AVAILABLE');
     expect(screen.getByTestId('land-offers-count')).toHaveTextContent('Offers received: 1 offer');
-    // While AVAILABLE (no accepted offer), Edit Listing is visible, while Mark as Sold and Reopen as Available MUST NOT be visible!
+    // While AVAILABLE (no accepted offer), Edit Listing and Remove My Listing are visible, while Mark as Sold and Reopen as Available MUST NOT be visible!
     expect(screen.getByText(/Edit Listing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Remove My Listing/i)).toBeInTheDocument();
     expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
 
@@ -821,9 +844,10 @@ describe('Edit Listing & User Profile Features', () => {
     });
     fireEvent.click(screen.getByText('Close'));
 
-    // Now that the offer was accepted, the popup reflects RESERVED, hides "Edit Listing", and shows "Mark as Sold (Close Deal)" & "Reopen as Available"
+    // Now that the offer was accepted, the popup reflects RESERVED, hides "Edit Listing" & "Remove My Listing", and shows "Mark as Sold (Close Deal)" & "Reopen as Available"
     expect(await screen.findByTestId('land-details-popup')).toHaveTextContent('RESERVED');
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Mark as Sold \(Close Deal\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Reopen as Available/i)).toBeInTheDocument();
 
@@ -837,9 +861,10 @@ describe('Edit Listing & User Profile Features', () => {
 
     expect(await screen.findByText(/marked as SOLD/i)).toBeInTheDocument();
     expect(screen.getByTestId('land-details-popup')).toHaveTextContent('SOLD');
-    // Once SOLD, Mark as Sold, Reopen as Available, and Edit Listing buttons must no longer exist
+    // Once SOLD, Mark as Sold, Reopen as Available, Edit Listing, and Remove My Listing buttons must no longer exist
     expect(screen.queryByText(/Mark as Sold \(Close Deal\)/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Reopen as Available/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Edit Listing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remove My Listing/i)).not.toBeInTheDocument();
   });
 });

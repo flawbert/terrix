@@ -193,6 +193,11 @@ public class LandLotService {
         if (authenticatedEmail == null || !landLot.getOwner().getEmail().equalsIgnoreCase(authenticatedEmail)) {
             throw new BusinessRuleException("Only the owner of the land lot can delete this listing.");
         }
+
+        if (landLot.getStatus() != LandStatus.AVAILABLE) {
+            throw new BusinessRuleException("Reserved or sold land lots can no longer be deleted.");
+        }
+
         landLotRepository.delete(landLot);
     }
 

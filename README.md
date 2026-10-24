@@ -34,10 +34,16 @@ Traditional real estate and agricultural land platforms rely on static text desc
 - **Interactive Lot Inspection Popup:** Clicking any land polygon on the map smoothly zooms into the plot and opens a detailed card displaying its status (`AVAILABLE`, `RESERVED`, `SOLD`), total price, calculated price per m², PostGIS-verified geodesic area (m² and ha), description, owner name, and contact details.
 
 ### Extra Features & Differentiators
-- **Stateless JWT Authentication & Route Protection:** Users can register and sign in with email and password (`BCrypt` hashing + `HMAC-SHA256` JWT). Public visitors can explore the map and perform circle searches freely, while mutating operations (creating listings, submitting purchase offers, managing status, or deleting lots) require authentication and strict ownership verification.
-- **Purchase Proposals & Lot Reservation Workflow:** Logged-in buyers can submit formal purchase offers (custom price + payment terms message) on available lots. Landowners have a **"Proposals Inbox"** modal where they can **Accept** (automatically transitioning the land lot status to `RESERVED` on the map and rejecting competing pending offers) or **Reject** proposals.
-- **Multi-Tab Real-Time Synchronization:** Powered by `sessionStorage` JWT isolation and the browser `BroadcastChannel` API, two different users can interact with the application simultaneously in separate browser tabs—any land lot created, reserved, or removed in Tab A automatically updates on Tab B's map in real time.
-- **Satellite & Street Map Hybrid Switcher + Combined Filters:** Users can toggle Esri World Imagery satellite layers, view a semantic color status legend, and combine spatial circle searches with status and maximum price filters.
+- **Stateless JWT Authentication & Route Protection:** Users can register and sign in with email and password (`BCrypt` hashing + `HMAC-SHA256` JWT). Public visitors can explore the map and perform circle searches freely, while mutating operations (creating listings, submitting purchase offers, managing status, editing, or deleting lots) require authentication and strict ownership verification.
+- **Purchase Proposals, Lot Lifecycle & Reservation Workflow (`AVAILABLE` -> `RESERVED` -> `SOLD`):**
+  - Logged-in buyers can submit formal purchase offers (custom price + payment terms message) exclusively on `AVAILABLE` lots (owners cannot bid on their own lots).
+  - Landowners have a **"Proposals Inbox"** modal (with a real-time notification badge for pending offers) where they can **Accept** (transitioning the land lot status from `AVAILABLE` to `RESERVED`) or **Reject** proposals.
+  - While a lot is `AVAILABLE`, the owner can **Edit** its details or **Remove** the listing, and the details popup shows the owner how many offers have been received.
+  - Once a lot is `RESERVED` or `SOLD`, **editing and removing the listing are strictly blocked** (both in the UI and in the backend service layer).
+  - For a `RESERVED` lot, the owner can either **Mark as Sold (Close Deal)** (`RESERVED` -> `SOLD`, permanently closing the deal; `SOLD` lots cannot be reopened, edited, or deleted) or **Reopen as Available** (`RESERVED` -> `AVAILABLE`, canceling the accepted proposal).
+- **User Profile Modal ("My Reservations" & "My Listings"):** Authenticated users can inspect all purchase offers/reservations they have submitted (with current proposal and lot statuses) as well as manage all land lots they have created, jumping directly to any plot on the map.
+- **Multi-Tab Real-Time Synchronization:** Powered by `sessionStorage` JWT isolation and the browser `BroadcastChannel` API, two different users can interact with the application simultaneously in separate browser tabs—any land lot created, edited, reserved, sold, or removed in Tab A automatically updates on Tab B's map in real time.
+- **Satellite & Street Map Hybrid Switcher + Combined Filters:** Users can toggle Esri World Imagery satellite layers, view a semantic color status legend, and combine spatial circle searches (up to 50 km radius) with status and maximum price filters.
 
 ---
 
@@ -50,7 +56,7 @@ The project is structured as a clean monorepo containing three orchestrated serv
     ├── backend/                  # Java 21 + Spring Boot 3.4 + Hibernate Spatial + Flyway + JaCoCo
     │   └── src/main/java/com/terrix/
     │       ├── config/           # Spring Security filter chain, CORS & BCrypt beans
-    │       ├── controller/       # REST Controllers (LandLotController, AuthController, ProposalController)
+    │       ├── controller/       # REST Controllers (LandLotController, AuthController, ProposalController, ProfileController)
     │       ├── domain/           # JPA Entities (JTS Polygon SRID 4326), Enums & PostGIS Repositories
     │       ├── dto/              # Immutable Java Records for request/response payloads & GeoJSON
     │       ├── exception/        # RFC 7807 ProblemDetail GlobalExceptionHandler
@@ -59,7 +65,7 @@ The project is structured as a clean monorepo containing three orchestrated serv
     │       └── util/             # JTS Polygon <-> GeoJSON conversion & topological sanity checks
     ├── frontend/                 # React 18 + TypeScript + Vite + OpenLayers 10 + TailwindCSS + Vitest
     │   └── src/
-    │       ├── components/       # LandMap (OpenLayers engine), LandDetailsPopup, CreateLandModal, AuthModal
+    │       ├── components/       # LandMap, LandDetailsPopup, CreateLandModal, EditLandModal, UserProfileModal, AuthModal
     │       ├── services/         # Typed Fetch API client & sessionStorage JWT management
     │       ├── types/            # TypeScript interfaces for GeoJSON, LandLot, Proposal, and Auth
     │       └── utils/            # Geodesic formatters & BroadcastChannel cross-tab live sync
@@ -70,14 +76,15 @@ The project is structured as a clean monorepo containing three orchestrated serv
 1. **Strategy Pattern (`LandValidationStrategy` — Open/Closed Principle):**
    - Spatial and domain validations executed during land lot creation are decoupled into independent strategy beans implementing `LandValidationStrategy`:
      - `PolygonOverlapValidationStrategy` (`@Order(1)`): Queries PostGIS to ensure the candidate polygon does not overlap existing lots.
-     - `MinimumAreaValidationStrategy` (`@Order(2)`): Queries PostGIS geodesic area calculation to enforce a minimum plot size (>= 25 m²) and prevent degenerate slivers.
+     - `MinimumAreaValidationStrategy` (`@Order(2)`): Queries PostGIS geodesic area calculation to enforce a realistic plot size (`>= 25 m²` and `<= 5,000 ha / 50 km²`) and prevent degenerate slivers or oversized geometries.
    - `LandLotService` receives `List<LandValidationStrategy>` via constructor dependency injection. New spatial rules (e.g., environmental reserve restriction) can be added as new `@Component` classes without modifying `LandLotService`.
 2. **DTO Pattern with Immutable Java Records:**
-   - Entities (`LandLot`, `User`, `Proposal`) are never exposed directly in controllers. Java `record` DTOs (`LandLotResponse`, `CreateLandLotRequest`, `GeoJsonPolygonDto`) ensure immutability and clean serialization.
+   - Entities (`LandLot`, `User`, `Proposal`) are never exposed directly in controllers. Java `record` DTOs (`LandLotResponse`, `CreateLandLotRequest`, `UpdateLandLotRequest`, `GeoJsonPolygonDto`) ensure immutability and clean serialization.
 3. **RFC 7807 Problem Details (`GlobalExceptionHandler`):**
    - Domain exceptions map to standardized HTTP status codes:
      - `LandOverlapException` -> **`409 Conflict`** (the request syntax and geometry are valid, but conflict with the current spatial state of the database).
-     - `InvalidGeometryException` / `BusinessRuleException` -> **`400 Bad Request`**.
+     - `BusinessRuleException` -> **`422 Unprocessable Entity`** (domain/lifecycle rule violations, such as attempting to edit or delete a `RESERVED` or `SOLD` lot, or invalid status transitions).
+     - `InvalidGeometryException` -> **`400 Bad Request`**.
      - `ResourceNotFoundException` -> **`404 Not Found`**.
 
 ### Spatial Engine: `geometry` vs. `geography` & Boundary Snapping Tolerance
@@ -204,9 +211,9 @@ Both the backend and frontend enforce a minimum **80% code coverage gate** durin
 | `GET` | `/api/v1/lands/{id}` | Public | Returns details of a specific land lot by UUID. |
 | `GET` | `/api/v1/lands/search/circle` | Public | Filters lots intersecting a circle (`centerLon`, `centerLat`, `radiusMeters`, optional `maxPrice`, `status`). |
 | `POST` | `/api/v1/lands` | Authenticated (JWT) | Validates non-overlapping polygon in PostGIS and registers a new land lot (`201 Created` or `409 Conflict`). |
-| `PATCH` | `/api/v1/lands/{id}/status` | Owner (JWT) | Updates land lot status (`AVAILABLE`, `RESERVED`, `SOLD`). |
-| `PUT` | `/api/v1/lands/{id}` | Owner (JWT) | Edits a listing's `title`, `description`, `price` and `contactInfo` (geometry/area are immutable; `RESERVED` and `SOLD` lots cannot be edited). |
-| `DELETE` | `/api/v1/lands/{id}` | Owner (JWT) | Removes a land lot listing (`204 No Content`). |
+| `PATCH` | `/api/v1/lands/{id}/status` | Owner (JWT) | Updates land lot status (`RESERVED -> SOLD` after an accepted proposal, or `RESERVED -> AVAILABLE` to reopen; `SOLD` lots cannot be reopened or changed). |
+| `PUT` | `/api/v1/lands/{id}` | Owner (JWT) | Edits a listing's `title`, `description`, `price` and `contactInfo` (geometry/area are immutable; only `AVAILABLE` lots can be edited — `RESERVED` and `SOLD` are blocked). |
+| `DELETE` | `/api/v1/lands/{id}` | Owner (JWT) | Removes a land lot listing (`204 No Content`; only `AVAILABLE` lots can be removed — `RESERVED` and `SOLD` are blocked). |
 | `POST` | `/api/v1/auth/register` | Public | Creates a new user account and returns a signed JWT. |
 | `POST` | `/api/v1/auth/login` | Public | Authenticates user credentials and returns a signed JWT. |
 | `POST` | `/api/v1/lands/{id}/proposals` | Authenticated (JWT) | Submits a purchase offer (`offeredPrice`, `message`) on an available land lot. |
